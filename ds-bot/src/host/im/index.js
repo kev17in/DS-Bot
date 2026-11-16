@@ -6,6 +6,7 @@ import { randomBytes, randomUUID } from 'node:crypto'
 import { chmod, mkdir, readFile, rm, writeFile } from 'node:fs/promises'
 import { join } from 'node:path'
 import { replaceFile } from '../files.js'
+import { HANDOFF_ACK } from '../constants.js'
 import { viewCardText } from '../parts.js'
 import { imPlatform, IM_PLATFORMS } from '../../shared/im-platforms.js'
 import { adapters } from './platforms/index.js'
@@ -409,8 +410,11 @@ export function install(rt) {
     const valid = labels.filter(label => (found.question.options ?? []).some(option => option.label === label))
     if (valid.length === 0) return false
     try {
-      await rt.answerQuestion(found.sessionId, found.question.id, { selected: valid })
+      // Settle the chosen label before the answer removes the question: the save
+      // inside answerQuestion fires onSaved, whose settleGone would otherwise
+      // stamp a generic "answered" here first (settleCard never overwrites).
       await settleCard(conn.id, held.cardKey, valid.join(', '))
+      await rt.answerQuestion(found.sessionId, found.question.id, { selected: valid })
       await settledEdits(conn)
     } catch (error) {
       if (error?.code === 'bot/stale') {
@@ -615,7 +619,25 @@ export function install(rt) {
     }
   }
 
-  // Buttons drop and the answer shows wherever the card was settled.
+  // Buttons drop and the answer shows wherever the card was settled. A settled
+  // question marks its chosen options in place (✅ on the option line) rather
+  // than appending the answer after the list; anything else keeps the old form.
+  const markedBody = (entry) => {
+    if (entry.text === undefined) return `(${text('answered')})`
+    const chosen = String(entry.answer ?? '').split(',').map(part => part.trim()).filter(part => part !== '')
+    if (chosen.length === 0) return `${entry.text}\n— ${entry.answer}`
+    let marked = 0
+    const lines = entry.text.split('\n').map(line => {
+      const match = /^(\s*\d+\.\s+)(.+)$/.exec(line)
+      if (match === null) return line
+      const rest = match[2]
+      const hit = chosen.some(label => rest === label || rest.startsWith(`${label} —`) || rest.startsWith(`${label} -`) || rest.startsWith(`${label}(`))
+      if (!hit) return line
+      marked += 1
+      return `✅ ${line}`
+    })
+    return marked > 0 ? lines.join('\n') : `${entry.text}\n— ${entry.answer}`
+  }
   const settledEdits = async (conn) => {
     const runner = runners.get(conn.id)
     const data = runtimes.get(conn.id)?.data
@@ -626,8 +648,8 @@ export function install(rt) {
         const chat = conn.chats?.[entry.chatKey]
         if (chat === undefined) continue
         entry.edited = true
-        const body = entry.text !== undefined ? `${entry.text}\n— ${entry.answer}` : `(${text('answered')})`
-        runner.handle.edit({ key: entry.chatKey, kind: chat.kind, title: chat.title }, entry.messageId, { text: body }).catch(() => {})
+        runner.handle.edit({ key: entry.chatKey, kind: chat.kind, title: chat.title }, entry.messageId, { text: markedBody(entry) })
+          .catch(error => rt.warn('ds-bot: im card edit failed %s: %s', entry.messageId, error))
         scheduleWrite(conn.id)
       }
     }
@@ -1016,19 +1038,59 @@ export function install(rt) {
   }
 
   // ----------------------------------------------------------------- outbound
+  // Only a turn's final answer goes out. A turn narrates as it works ("let me look",
+  // "found it"), and every one of those lines used to reach the chat, which buried
+  // the answer under progress. So a Bot's text is held here while its turn runs, and
+  // turn/end sends just the last piece of it — the answer — when the turn ended by
+  // itself. A turn that failed, was stopped, or ran out of room says nothing, and a
+  // turn that goes on after a tool call keeps holding until it really ends.
+  // The text is kept per Session rather than per turn: displayItems is called here
+  // with one event and no Session, so the turn number it would stamp is not
+  // available, while a Session runs one turn at a time anyway.
+  // Cards never come through here: diffCards sends questions, approvals, secret
+  // requests and views the moment they open, so whatever asks for an answer or a
+  // permission still arrives at once.
+  const heldText = new Map()  // sessionId -> last held text
+
+  const sendBotText = (botId, body) => {
+    if (body.trim() === '') return
+    for (const conn of Object.values(connections())) {
+      if (!runners.has(conn.id)) continue
+      for (const { chatKey, chat } of listeners(conn, { botId })) sendTo(conn, chatKey, { key: chatKey, kind: chat.kind, title: chat.title }, body)
+    }
+  }
+
   ctx.on('session/event', (session, event) => {
     const botId = rt.chatOwners.get(session.id)
     if (botId === undefined) {
       imVia.delete(session.id)
+      heldText.delete(session.id)
       return
     }
     const rpcId = event.type === 'user/message' ? event.data?.source?.rpcId : undefined
     if (typeof rpcId === 'string' && rpcId.startsWith('im:') && Number.isInteger(event.seq)) {
       imVia.set(session.id, { ...imVia.get(session.id), [event.seq]: rpcId.split(':')[1] })
     }
+    // The turn ended on its own: what it last said is its answer.
+    if (event.type === 'turn/end') {
+      const text = heldText.get(session.id)
+      heldText.delete(session.id)
+      const reason = event.data?.reason
+      if (text !== undefined && (reason === undefined || reason.kind === 'completed')) {
+        const body = text.trim()
+        if (body !== '' && body !== HANDOFF_ACK) sendBotText(botId, body)
+      }
+      return
+    }
     for (const item of rt.displayItems(session.id, [event])) {
-      if (item.kind !== 'bot' && item.kind !== 'view') continue
-      const body = item.kind === 'bot' ? item.text : viewCardText({ title: item.title, view: item.view }) || (item.title ?? '')
+      if (item.kind === 'bot') {
+        heldText.set(session.id, item.text)
+        continue
+      }
+      // A view is a result drawn, not progress, and it asks nothing back: it goes
+      // out as it is drawn.
+      if (item.kind !== 'view') continue
+      const body = viewCardText({ title: item.title, view: item.view }) || (item.title ?? '')
       for (const conn of Object.values(connections())) {
         if (!runners.has(conn.id)) continue
         for (const { chatKey, chat } of listeners(conn, { botId })) sendTo(conn, chatKey, { key: chatKey, kind: chat.kind, title: chat.title }, body)

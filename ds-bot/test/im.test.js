@@ -206,10 +206,13 @@ test('outbound: assistant text and member lines go out; hidden turns, user and s
   await dm(s, 'u1', 'hi')
   s.fake.sent.length = 0
   s.emitEvent('a', 'assistant/message', { message: { content: [{ type: 'text', text: 'visible reply' }] } })
+  assert.equal(s.fake.sent.length, 0, 'in-turn text is held back')
+  s.emitEvent('a', 'turn/end', { reason: { kind: 'completed' } })
   assert.equal(s.fake.sent.length, 1)
   assert.equal(s.fake.sent[0].text, 'visible reply')
   s.rt.state.exchangeTurns.a = [7]
   s.emitEvent('a', 'assistant/message', { message: { content: [{ type: 'text', text: 'hidden' }] }, turn: 7 })
+  s.emitEvent('a', 'turn/end', { reason: { kind: 'completed' } })
   s.emitEvent('a', 'user/message', { source: { kind: 'user' }, content: [{ type: 'text', text: 'user typed' }] })
   assert.equal(s.fake.sent.length, 1)
   one.chats.g1 = { kind: 'group', title: 'G', target: { roomId: 'r1' }, at: 1 }
@@ -563,6 +566,7 @@ test('a permanent send error shows in the status and is not retried; a network e
   await dm(s, 'u1', 'hi')
   s.fake.fails.push(Object.assign(new Error('forbidden'), { status: 403, permanent: true }))
   s.emitEvent('a', 'assistant/message', { message: { content: [{ type: 'text', text: 'will fail' }] } })
+  s.emitEvent('a', 'turn/end', { reason: { kind: 'completed' } })
   await s.flush()
   assert.equal(s.rt.imStatusView()[conn.id].state, 'error')
   assert.match(s.rt.imStatusView()[conn.id].error, /forbidden/)
@@ -572,6 +576,7 @@ test('a permanent send error shows in the status and is not retried; a network e
   s.fake.fails.push(Object.assign(new Error('network down'), {}))
   s.emitEvent('a', 'assistant/message', { message: { content: [{ type: 'text', text: 'first' }] } })
   s.emitEvent('a', 'assistant/message', { message: { content: [{ type: 'text', text: 'second' }] } })
+  s.emitEvent('a', 'turn/end', { reason: { kind: 'completed' } })
   await s.flush()
   await delay(20)
   await s.rt.imEndpoint('im-retry', { id: conn.id })

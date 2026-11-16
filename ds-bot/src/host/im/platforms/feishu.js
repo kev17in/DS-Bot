@@ -312,14 +312,15 @@ export default {
       body: {
         elements: [
           { tag: 'markdown', content: text },
-          ...(buttons?.length > 0 ? [{
-            tag: 'action',
-            actions: buttons.slice(0, 5).map(button => ({
+          // Schema 2.0 dropped the `action` container: its buttons are rejected with
+          // ErrCode 200861 ("unsupported tag action"), so they sit in body.elements.
+          ...(buttons?.length > 0
+            ? buttons.slice(0, 5).map(button => ({
               tag: 'button', type: 'primary',
               text: { tag: 'plain_text', content: button.label.slice(0, 20) },
               value: { v: button.data },
-            })),
-          }] : []),
+            }))
+            : []),
         ],
       },
     })
@@ -329,12 +330,14 @@ export default {
         const chunks = chunkMarkdown(String(text ?? ''), TEXT_LIMIT)
         let messageId
         for (const [index, chunk] of chunks.entries()) {
-          const interactive = buttons !== undefined && index === chunks.length - 1
+          // Everything goes out as an interactive card: its markdown element renders
+          // **bold**, lists and code, while msg_type 'text' shows them literally.
+          const last = index === chunks.length - 1
           const sent = await rest('/open-apis/im/v1/messages?receive_id_type=chat_id', {
             body: {
               receive_id: chat.key,
-              msg_type: interactive ? 'interactive' : 'text',
-              content: interactive ? card(chunk, buttons) : JSON.stringify({ text: chunk }),
+              msg_type: 'interactive',
+              content: card(chunk, last ? buttons : undefined),
             },
           })
           messageId = String(sent?.data?.message_id ?? messageId ?? '')
