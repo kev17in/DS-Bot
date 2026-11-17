@@ -417,6 +417,13 @@ export default {
           body: { msg_type: 'interactive', content: card(toMarkdown(text).slice(0, TEXT_LIMIT), buttons) },
         })
       },
+      // A receipt reaction on a message this Bot received. Feishu names its ✅
+      // emoji "DONE"; other platforms keep their own emoji inside their adapter.
+      react: async (chat, messageId) => {
+        await rest(`/open-apis/im/v1/messages/${messageId}/reactions`, {
+          body: { reaction_type: { emoji_type: 'DONE' } },
+        })
+      },
       stop: () => {
         stopped = true
         generation += 1

@@ -1,6 +1,7 @@
 // The IM platforms DS Bot can connect to. The settings page draws the add form from
 // `fields`; `secret` fields are kept as DS Bot secrets and never leave the host.
 // `buttons`: the platform can show card buttons (others answer with numbers).
+// `reactions`: the platform can put a receipt reaction on a received message.
 // `groups`: the IM bot can be @-mentioned in platform group chats.
 // `login: 'qr'`: the connection starts by scanning a code instead of filling fields.
 export const IM_PLATFORMS = [
@@ -10,6 +11,7 @@ export const IM_PLATFORMS = [
     fields: [{ key: 'token', label: 'Bot token', secret: true }],
     buttons: true,
     groups: true,
+    reactions: true,
     help: 'https://t.me/BotFather',
   },
   {
@@ -30,6 +32,7 @@ export const IM_PLATFORMS = [
     ],
     buttons: true,
     groups: true,
+    reactions: true,
   },
   {
     id: 'dingtalk',

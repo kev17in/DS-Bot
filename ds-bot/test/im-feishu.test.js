@@ -262,6 +262,17 @@ test('send posts text and an interactive card, edit patches the message', async 
   assert.ok(patch, 'message PATCH called')
 })
 
+test('a receipt reaction posts the platform emoji on the message', async (t) => {
+  const fake = await fakeFeishu()
+  const handle = feishu.connect(FIELDS, env(fake), { onMessage: () => {}, onAction: () => {}, onStatus: () => {} })
+  t.after(() => { handle.stop(); fake.close() })
+  await until(() => fake.sockets[0])
+  await handle.react({ key: 'oc_1', kind: 'direct' }, 'om_9')
+  const post = fake.calls.find(call => call.method === 'POST' && call.path === '/open-apis/im/v1/messages/om_9/reactions')
+  assert.ok(post, 'reactions POST called')
+  assert.deepEqual(post.params, { reaction_type: { emoji_type: 'DONE' } })
+})
+
 test('send drops blank lines at the start and end of the text', async (t) => {
   const fake = await fakeFeishu()
   const handle = feishu.connect(FIELDS, env(fake), { onMessage: () => {}, onAction: () => {}, onStatus: () => {} })
@@ -271,8 +282,12 @@ test('send drops blank lines at the start and end of the text', async (t) => {
   await handle.send({ key: 'oc_1', kind: 'direct' }, { text: '\n\nfirst\n\nsecond\n\n' })
   const posts = fake.calls.filter(call => call.path.startsWith('/open-apis/im/v1/messages?'))
   assert.equal(posts.length, 1)
-  assert.equal(posts[0].params.msg_type, 'text')
-  assert.equal(JSON.parse(posts[0].params.content).text, 'first\n\nsecond')
+  // Everything goes out as an interactive card so markdown renders; the trimmed
+  // text sits in the card's markdown element.
+  assert.equal(posts[0].params.msg_type, 'interactive')
+  const card = JSON.parse(posts[0].params.content)
+  const markdown = card.body.elements.find(element => element.tag === 'markdown')
+  assert.equal(markdown.content, 'first\n\nsecond')
 })
 
 test('a dropped socket reconnects through a fresh endpoint and a renewed token', async (t) => {
