@@ -59,7 +59,12 @@ export function install(rt) {
   const fail = (message, code = 'bot/error') => ({ ok: false, error: { code, message, details: {} } })
   // Models come from DSH, not state.json, so a provider added on the Models pages of Settings
   // changes the view without a new revision.
-  const modelsKey = () => `${rt.cachedCatalog().map(entry => `${entry.ref}${entry.needsKey ? '!' : ''}${entry.reasoning ? `:${JSON.stringify(entry.reasoning)}` : ''}`).join(',')}|${rt.cachedDefault() ?? ''}`
+  const modelsKey = () => {
+    const refs = rt.cachedCatalog()
+      .map(entry => `${entry.ref}${entry.needsKey ? '!' : ''}${entry.reasoning ? `:${JSON.stringify(entry.reasoning)}` : ''}`)
+      .join(',')
+    return `${refs}|${rt.cachedDefault() ?? ''}`
+  }
   const view = () => ({
     revision: state.revision,
     workspaceId: state.workspaceId ?? null,
@@ -92,7 +97,8 @@ export function install(rt) {
     rooms: Object.values(state.rooms).map(({ log, seen, paused, sessions, segments, parts: ownParts, ...room }) => {
       const parts = [...Object.values(sessions ?? {}), ...Object.values(segments ?? {}).flat().map(segment => segment.sessionId), ...(ownParts ?? []).map(segment => segment.sessionId)]
       const last = (log ?? []).filter(line => line.kind === undefined).at(-1)
-      return { ...room, sessionId: rt.sessionOfRoom(room), ownParts: (ownParts ?? []).map(segment => segment.sessionId), parts, ...(last ? { lastAt: last.time, preview: last.who === 'User' ? last.text : `${last.who}：${last.text}` } : {}) }
+      const preview = last === undefined ? {} : { lastAt: last.time, preview: last.who === 'User' ? last.text : `${last.who}：${last.text}` }
+      return { ...room, sessionId: rt.sessionOfRoom(room), ownParts: (ownParts ?? []).map(segment => segment.sessionId), parts, ...preview }
     }),
     // Deleted private Bots whose folder, memory and chats stay closed to the others.
     privateArchives: rt.archivesView(),
@@ -143,17 +149,21 @@ export function install(rt) {
   // running; `work`: per Bot, the turn it runs and its tool; per group, the members whose
   // turn there runs; the approvals waiting; per Bot, who it waits for to hand back work;
   // and per Session, when its running turn began.
+  // Which of a Bot's own chat parts has a turn right now, current or background:
+  // the session list's Running mark reads this, not a guess from the transcript.
+  const partsRunningView = () => {
+    const partIds = Object.values(state.bots)
+      .flatMap(bot => [rt.chatOf(bot.id), ...(bot.openParts ?? []).map(part => part.sessionId)])
+      .filter((sessionId, index, list) => sessionId !== undefined && list.indexOf(sessionId) === index)
+    return Object.fromEntries(partIds
+      .filter(sessionId => rt.live.get(sessionId)?.turn !== undefined)
+      .map(sessionId => [sessionId, true]))
+  }
   const live = () => ({
     secretStore: rt.secretStoreStatus(),
     secrets: rt.secretsView(),
     activity: rt.activityView(),
-    // Which of a Bot's own chat parts has a turn right now, current or background:
-    // the session list's Running mark reads this, not a guess from the transcript.
-    partsRunning: Object.fromEntries(Object.values(state.bots)
-      .flatMap(bot => [rt.chatOf(bot.id), ...(bot.openParts ?? []).map(part => part.sessionId)])
-      .filter((sessionId, index, list) => sessionId !== undefined && list.indexOf(sessionId) === index)
-      .filter(sessionId => rt.live.get(sessionId)?.turn !== undefined)
-      .map(sessionId => [sessionId, true])),
+    partsRunning: partsRunningView(),
     work: { bots: rt.workView(), rooms: rt.roomWorkView(), approvals: rt.approvalsView(), waiting: rt.waitingView?.() ?? {}, turns: rt.turnsView?.() ?? {}, steered: rt.steeredView?.() ?? {} },
     memoryNews: rt.memoryNews(),
     memoryReviews: rt.memoryReviews(),
