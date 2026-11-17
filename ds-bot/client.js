@@ -34641,7 +34641,7 @@ function QrCode({ text }) {
 function minutesLeft(until) {
   return Math.max(0, Math.ceil((until - Date.now()) / 6e4));
 }
-var APP_DOWNLOAD = "https://github.com/Fei2411/DS-Bot/releases/latest";
+var APP_DOWNLOAD = "https://github.com/kev17in/DS-Bot/releases/latest";
 function PhonePage({ roster, actions, Section: Section2, Row: Row4 }) {
   const phone = roster.phone ?? OFF;
   const [server, setServer] = (0, import_react43.useState)(phone.server);
