@@ -37,8 +37,8 @@ First install DSH and set up at least one model in it. DS Bot uses the models fr
 - **DSH Web** (needs Node.js `22.19` or later, and pnpm):
 
 ```sh
-npx @deepseek-ai/dsh@0.2.2-rc.1 plugin --profile web add ds-bot
-npx @deepseek-ai/dsh@0.2.2-rc.1 web
+npx @deepseek-ai/dsh@0.2.2-rc.3 plugin --profile web add ds-bot
+npx @deepseek-ai/dsh@0.2.2-rc.3 web
 ```
 
 **Docker (NAS, Linux server)**
