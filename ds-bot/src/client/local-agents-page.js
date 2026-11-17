@@ -74,7 +74,13 @@ export function LocalAgentsPage({ run, Row }) {
   const load = endpoint => run(call(endpoint).then(setView))
   const refresh = () => load('local-agent-refresh')
   useEffect(() => { void load('local-agents') }, [])
-  if (view === null) return null
+  if (view === null) {
+    // Finding the CLIs and asking each for its version and sign-in state takes a
+    // moment; the page says so instead of staying blank.
+    return h('section', { className: 'bt-set-section' },
+      h('div', { className: 'bt-set-card' }, h('div', { className: 'bt-set-row' },
+        h('i', { className: 'bt-loading-spin', 'aria-hidden': true }), t('Reading local agents…'))))
+  }
   if (view.available === false) return h('p', { className: 'bt-set-hint' }, t('This DSH cannot register local agent routes.'))
   return [
     h('section', { key: 'found', className: 'bt-set-section' },

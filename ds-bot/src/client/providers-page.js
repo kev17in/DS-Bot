@@ -132,7 +132,13 @@ export function ProvidersPage({ actions, run, roster, Section, advanced = null }
   // Resolves true when the host took it; the page then shows the host's new view.
   const apply = promise => run(translated(promise).then((next) => { if (next?.providers) setView(next) }))
   useEffect(() => { void apply(actions.providers()) }, [])
-  if (view === null) return null
+  if (view === null) {
+    // The host lists every provider and its key state; that can take a moment, and a
+    // blank page reads as broken (#load).
+    return h(Section, { title: t('Model providers') },
+      h('div', { className: 'bt-set-card' }, h('div', { className: 'bt-set-row' },
+        h('i', { className: 'bt-loading-spin', 'aria-hidden': true }), t('Reading models…'))))
+  }
   if (!view.available) return h('p', { className: 'bt-set-hint' }, t('This DSH cannot set up model providers.'))
   const addBtn = adding ? null : h('button', { type: 'button', className: 'bt-soft bt-soft-sm bt-with-icon', onClick: () => setAdding(true) }, h(PlusIcon), t('Add a provider'))
   return [

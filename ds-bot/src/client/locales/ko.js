@@ -248,6 +248,7 @@ export const KO = {
   'Another provider': '다른 제공자',
   // Models page
   'This DSH cannot set up model providers.': '이 DSH에서는 모델 제공자를 설정할 수 없습니다.',
+  'Model providers': '모델 공급자',
   'This DSH cannot set up model providers': '이 DSH에서는 모델 제공자를 설정할 수 없습니다',
   'Model providers · {count}': '모델 제공자 · {count}',
   'Add a provider': '제공자 추가',
@@ -278,6 +279,7 @@ export const KO = {
   'Sign-in unknown': '로그인 상태 알 수 없음',
   'Looking for agent CLIs…': 'Agent CLI 찾는 중…',
   'Reading models…': '모델 읽는 중…',
+  'Reading local agents…': '로컬 에이전트 읽는 중…',
   "Answers with a model served by DS Bot, with DS Bot's tools.": 'DS Bot에서 제공하는 모델과 DS Bot의 도구로 응답합니다.',
   'Answers through this CLI on your computer, with its own tools and sign-in.': '컴퓨터의 이 CLI를 통해 자체 도구와 로그인 계정으로 응답합니다.',
   'Change what {name} runs on?': '{name}의 실행 방식을 변경하시겠습니까?',

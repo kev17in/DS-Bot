@@ -248,6 +248,7 @@ export const DE = {
   'Another provider': 'Anderer Anbieter',
   // Models page
   'This DSH cannot set up model providers.': 'Dieses DSH kann keine Modellanbieter einrichten.',
+  'Model providers': 'Modellanbieter',
   'This DSH cannot set up model providers': 'Dieses DSH kann keine Modellanbieter einrichten',
   'Model providers · {count}': 'Modellanbieter · {count}',
   'Add a provider': 'Anbieter hinzufügen',
@@ -278,6 +279,7 @@ export const DE = {
   'Sign-in unknown': 'Anmeldestatus unbekannt',
   'Looking for agent CLIs…': 'Suche nach Agent-CLIs…',
   'Reading models…': 'Modelle werden geladen…',
+  'Reading local agents…': 'Lokale Agents werden geladen…',
   "Answers with a model served by DS Bot, with DS Bot's tools.": 'Antwortet mit einem Modell über DS Bot und nutzt die Werkzeuge von DS Bot.',
   'Answers through this CLI on your computer, with its own tools and sign-in.': 'Antwortet über diese CLI auf deinem Computer mit eigenen Werkzeugen und eigener Anmeldung.',
   'Change what {name} runs on?': 'Ausführungsart von {name} ändern?',

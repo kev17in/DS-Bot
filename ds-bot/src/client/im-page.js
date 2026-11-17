@@ -277,7 +277,7 @@ function DetailView({ conn, status, roster, actions, onBack }) {
         h(ImMark, { id: conn.platform, size: 40 }),
         h('span', { className: 'bt-set-copy' },
           h('span', { className: 'bt-im-title' }, t(conn.account?.name ?? shown.name)),
-          h('span', { className: 'bt-im-status' }, h(Dot, { state }), `${t(shown.name)} · ${stateText(conn, status)}`)),
+          h('span', { className: 'bt-im-status' }, h(Dot, { state }), h('span', { className: 'bt-im-status-text' }, `${t(shown.name)} · ${stateText(conn, status)}`))),
         h('span', { className: 'bt-set-control' },
           state === 'error' ? h('button', { type: 'button', className: 'bt-soft bt-soft-sm', disabled: busy, onClick: () => run(actions.imRetry(conn.id)) }, t('Try again')) : null,
           h(Switch, { on: conn.enabled, label: t('Enabled'), disabled: busy, onChange: on => run(actions.imUpdate(conn.id, { enabled: on })) }))),
@@ -320,7 +320,7 @@ function BotRow({ conn, status, roster, onOpen }) {
     h(ImMark, { id: conn.platform, size: 36 }),
     h('span', { className: 'bt-set-copy' },
       h('span', { className: 'bt-im-title' }, t(conn.account?.name ?? shown.name)),
-      h('span', { className: 'bt-im-status' }, h(Dot, { state }), [t(shown.name), stateText(conn, status), bot ? t('Talks to {bot}', { bot: bot.name }) : null].filter(Boolean).join(' · '))),
+      h('span', { className: 'bt-im-status' }, h(Dot, { state }), h('span', { className: 'bt-im-status-text' }, [t(shown.name), stateText(conn, status), bot ? t('Talks to {bot}', { bot: bot.name }) : null].filter(Boolean).join(' · ')))),
     waiting > 0 ? h('span', { className: 'bt-im-count', 'aria-label': t('{count} waiting for approval', { count: waiting }) }, waiting) : null,
     h('span', { className: 'bt-chevron' }, h(ChevronRightIcon)))
 }
@@ -376,8 +376,10 @@ export const IM_CSS = `
 .bt-app:not([data-state=ready]) .bt-im-mono{filter:grayscale(1);opacity:.5}
 .bt-im-title{font-size:14px;line-height:20px;font-weight:500;color:var(--bt-ink);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .bt-im-name{font-size:13px;line-height:18px;color:var(--bt-ink);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;min-width:0}
-.bt-im-status{display:flex;align-items:center;gap:6px;min-width:0;font-size:12px;line-height:16px;color:var(--bt-ink-3);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-[data-state=error]>.bt-set-copy>.bt-im-status{color:var(--bt-danger);white-space:normal}
+.bt-im-status{display:flex;align-items:center;gap:6px;min-width:0;font-size:12px;line-height:16px;color:var(--bt-ink-3)}
+.bt-im-status-text{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+[data-state=error]>.bt-set-copy>.bt-im-status{color:var(--bt-danger)}
+[data-state=error]>.bt-set-copy>.bt-im-status .bt-im-status-text{white-space:normal}
 .bt-im-dot{flex:none;width:7px;height:7px;border-radius:50%;corner-shape:round;background:var(--bt-ink-3)}
 .bt-im-dot[data-state=ready]{background:var(--bt-green)}
 .bt-im-dot[data-state=error]{background:var(--bt-danger)}

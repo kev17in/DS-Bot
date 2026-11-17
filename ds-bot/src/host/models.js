@@ -186,21 +186,22 @@ export function install(rt) {
     // The host is gone: the last answer stands, and no service is read again.
     const service = llm()
     if (service === undefined) return answerable(catalogCache.value)
-    const entries = []
-    for (const provider of service.listProviders()) {
-      let models = []
-      try { models = await service.listModels(provider.id) } catch { continue }
-      for (const model of models) {
-        entries.push({
+    // One provider that answers slowly must not hold the page behind the others:
+    // every provider is listed at once, in the order DSH serves them.
+    const listed = service.listProviders()
+    const batches = await Promise.all(listed.map(async (provider) => {
+      try {
+        return (await service.listModels(provider.id)).map(model => ({
           ref: `${provider.id}/${model.id}`,
           provider: provider.id,
           providerName: provider.name ?? provider.id,
           id: model.id,
           name: model.name ?? model.id,
           ...(model.inputModalities ? { input: [...model.inputModalities] } : {}),
-        })
-      }
-    }
+        }))
+      } catch { return [] }
+    }))
+    const entries = batches.flat()
     // The host was disposed while the models were listed: keep the answer, skip the
     // work that would read other services.
     if (llm() === undefined) return answerable(entries)

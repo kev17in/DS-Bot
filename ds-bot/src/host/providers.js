@@ -228,7 +228,14 @@ export function install(rt) {
     const catalog = await rt.catalog({ fresh: true })
     const providers = []
     const addable = []
-    for (const entry of ctx.llm.listConfigurableProviders()) {
+    // Key states are asked of the credentials service one provider at a time below;
+    // a slow answer must not hold the page behind the others.
+    const entries = ctx.llm.listConfigurableProviders()
+    const infos = new Map(await Promise.all(entries.map(async (entry) => {
+      const ref = refOf(profileOf(entry, map))
+      return [entry.provider, ref === undefined ? undefined : await found.credentials.describe(ref).catch(() => undefined)]
+    })))
+    for (const entry of entries) {
       const profile = profileOf(entry, map)
       if (entry.settingsNs === PI_AI && profile === undefined) {
         if (entry.declared !== true) addable.push({ id: entry.provider, name: entry.displayName })
@@ -237,7 +244,7 @@ export function install(rt) {
       const ref = refOf(profile)
       const models = catalog.filter(model => model.provider === entry.provider).map(model => ({ id: model.id, ref: model.ref, name: model.name }))
       if (ref === undefined && models.length === 0 && entry.error === undefined) continue
-      const info = ref === undefined ? undefined : await found.credentials.describe(ref).catch(() => undefined)
+      const info = infos.get(entry.provider)
       // A route can be refreshed when DSH's pi-ai discovery can list its endpoint and
       // the route has a user layer to write the new model list into. Native and
       // subscription routes (other settings namespaces, or base-only routes) have no

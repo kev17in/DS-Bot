@@ -166,7 +166,9 @@ export function probeVersion(executable, args, env) {
   return new Promise((resolve) => {
     try {
       const launch = launchOf(executable, args)
-      execFile(launch.file, launch.args, { encoding: 'utf8', timeout: 10_000, env, windowsHide: true, ...launch.options }, (error, stdout, stderr) => {
+      // The version line is for display only; a CLI slow to start must not hold the
+      // Local agents page behind it for long.
+      execFile(launch.file, launch.args, { encoding: 'utf8', timeout: 4_000, env, windowsHide: true, ...launch.options }, (error, stdout, stderr) => {
         const text = `${stdout ?? ''}${stderr ?? ''}`.split('\n').map(line => line.trim()).find(Boolean)
         resolve({ ok: error === null, version: text })
       })

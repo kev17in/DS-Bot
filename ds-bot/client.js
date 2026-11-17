@@ -367,6 +367,7 @@ var JA = {
   "An API key has no spaces or special characters": "API キーに空白や特殊文字は含められません",
   "Another provider": "別のプロバイダー",
   "This DSH cannot set up model providers.": "この DSH ではモデルプロバイダーを設定できません。",
+  "Model providers": "モデルプロバイダー",
   "This DSH cannot set up model providers": "この DSH ではモデルプロバイダーを設定できません",
   "Model providers · {count}": "モデルプロバイダー · {count}",
   "Add a provider": "プロバイダーを追加",
@@ -396,6 +397,7 @@ var JA = {
   "Sign-in unknown": "サインイン状態不明",
   "Looking for agent CLIs…": "エージェント CLI を検索中…",
   "Reading models…": "モデルを読み込み中…",
+  "Reading local agents…": "ローカルエージェントを読み込み中…",
   "Answers with a model served by DS Bot, with DS Bot's tools.": "DS Bot のモデルとツールを使って応答します。",
   "Answers through this CLI on your computer, with its own tools and sign-in.": "このコンピュータ上の CLI を通じて、自身のツールとサインイン情報で応答します。",
   "Change what {name} runs on?": "{name} の実行環境を変更しますか？",
@@ -2786,6 +2788,7 @@ var KO = {
   "Another provider": "다른 제공자",
   // Models page
   "This DSH cannot set up model providers.": "이 DSH에서는 모델 제공자를 설정할 수 없습니다.",
+  "Model providers": "모델 공급자",
   "This DSH cannot set up model providers": "이 DSH에서는 모델 제공자를 설정할 수 없습니다",
   "Model providers · {count}": "모델 제공자 · {count}",
   "Add a provider": "제공자 추가",
@@ -2816,6 +2819,7 @@ var KO = {
   "Sign-in unknown": "로그인 상태 알 수 없음",
   "Looking for agent CLIs…": "Agent CLI 찾는 중…",
   "Reading models…": "모델 읽는 중…",
+  "Reading local agents…": "로컬 에이전트 읽는 중…",
   "Answers with a model served by DS Bot, with DS Bot's tools.": "DS Bot에서 제공하는 모델과 DS Bot의 도구로 응답합니다.",
   "Answers through this CLI on your computer, with its own tools and sign-in.": "컴퓨터의 이 CLI를 통해 자체 도구와 로그인 계정으로 응답합니다.",
   "Change what {name} runs on?": "{name}의 실행 방식을 변경하시겠습니까?",
@@ -5247,6 +5251,7 @@ var ES = {
   "Another provider": "Otro proveedor",
   // Models page
   "This DSH cannot set up model providers.": "Este DSH no puede configurar proveedores de modelos.",
+  "Model providers": "Proveedores de modelos",
   "This DSH cannot set up model providers": "Este DSH no puede configurar proveedores de modelos",
   "Model providers · {count}": "Proveedores de modelos · {count}",
   "Add a provider": "Añadir proveedor",
@@ -5277,6 +5282,7 @@ var ES = {
   "Sign-in unknown": "Estado de sesión desconocido",
   "Looking for agent CLIs…": "Buscando CLIs de agentes…",
   "Reading models…": "Leyendo modelos…",
+  "Reading local agents…": "Leyendo agentes locales…",
   "Answers with a model served by DS Bot, with DS Bot's tools.": "Responde con un modelo servido por DS Bot, usando las herramientas de DS Bot.",
   "Answers through this CLI on your computer, with its own tools and sign-in.": "Responde mediante este CLI en tu ordenador, con sus propias herramientas e inicio de sesión.",
   "Change what {name} runs on?": "¿Cambiar en qué se ejecuta {name}?",
@@ -7705,6 +7711,7 @@ var FR = {
   "An API key has no spaces or special characters": "Une clé API ne contient ni espaces ni caractères spéciaux",
   "Another provider": "Autre fournisseur",
   "This DSH cannot set up model providers.": "Ce DSH ne peut pas configurer les fournisseurs de modèles.",
+  "Model providers": "Fournisseurs de modèles",
   "This DSH cannot set up model providers": "Ce DSH ne peut pas configurer les fournisseurs de modèles",
   "Model providers · {count}": "Fournisseurs de modèles · {count}",
   "Add a provider": "Ajouter un fournisseur",
@@ -7734,6 +7741,7 @@ var FR = {
   "Sign-in unknown": "État de connexion inconnu",
   "Looking for agent CLIs…": "Recherche de CLI d’agent…",
   "Reading models…": "Lecture des modèles…",
+  "Reading local agents…": "Lecture des agents locaux…",
   "Answers with a model served by DS Bot, with DS Bot's tools.": "Répond avec un modèle fourni par DS Bot et les outils de DS Bot.",
   "Answers through this CLI on your computer, with its own tools and sign-in.": "Répond via ce CLI sur votre ordinateur, avec ses propres outils et identifiants.",
   "Change what {name} runs on?": "Modifier le mode d’exécution de {name} ?",
@@ -10124,6 +10132,7 @@ var DE = {
   "Another provider": "Anderer Anbieter",
   // Models page
   "This DSH cannot set up model providers.": "Dieses DSH kann keine Modellanbieter einrichten.",
+  "Model providers": "Modellanbieter",
   "This DSH cannot set up model providers": "Dieses DSH kann keine Modellanbieter einrichten",
   "Model providers · {count}": "Modellanbieter · {count}",
   "Add a provider": "Anbieter hinzufügen",
@@ -10154,6 +10163,7 @@ var DE = {
   "Sign-in unknown": "Anmeldestatus unbekannt",
   "Looking for agent CLIs…": "Suche nach Agent-CLIs…",
   "Reading models…": "Modelle werden geladen…",
+  "Reading local agents…": "Lokale Agents werden geladen…",
   "Answers with a model served by DS Bot, with DS Bot's tools.": "Antwortet mit einem Modell über DS Bot und nutzt die Werkzeuge von DS Bot.",
   "Answers through this CLI on your computer, with its own tools and sign-in.": "Antwortet über diese CLI auf deinem Computer mit eigenen Werkzeugen und eigener Anmeldung.",
   "Change what {name} runs on?": "Ausführungsart von {name} ändern?",
@@ -12561,6 +12571,7 @@ var ZH = {
   "This DSH cannot set up model providers.": "这个 DSH 不能设置模型服务商。",
   "This DSH cannot set up model providers": "这个 DSH 不能设置模型服务商",
   "Model providers · {count}": "模型服务商 · {count}",
+  "Model providers": "模型服务商",
   "Add a provider": "添加服务商",
   "Needs an API key": "需要 API key",
   "Key set": "已设置 key",
@@ -12589,6 +12600,7 @@ var ZH = {
   "Sign-in unknown": "登录状态未知",
   "Looking for agent CLIs…": "正在查找 Agent CLI…",
   "Reading models…": "正在读取模型…",
+  "Reading local agents…": "正在读取本地 agent…",
   "Answers with a model served by DS Bot, with DS Bot's tools.": "用 DS Bot 里的模型回答，用 DS Bot 的工具。",
   "Answers through this CLI on your computer, with its own tools and sign-in.": "通过这台电脑上的 CLI 回答，用它自己的工具和登录。",
   "Change what {name} runs on?": "更换 {name} 的运行方式？",
@@ -35041,7 +35053,7 @@ function DetailView({ conn, status, roster, actions, onBack }) {
           "span",
           { className: "bt-set-copy" },
           (0, import_react44.createElement)("span", { className: "bt-im-title" }, t(conn.account?.name ?? shown.name)),
-          (0, import_react44.createElement)("span", { className: "bt-im-status" }, (0, import_react44.createElement)(Dot, { state }), `${t(shown.name)} · ${stateText(conn, status)}`)
+          (0, import_react44.createElement)("span", { className: "bt-im-status" }, (0, import_react44.createElement)(Dot, { state }), (0, import_react44.createElement)("span", { className: "bt-im-status-text" }, `${t(shown.name)} · ${stateText(conn, status)}`))
         ),
         (0, import_react44.createElement)(
           "span",
@@ -35123,7 +35135,7 @@ function BotRow2({ conn, status, roster, onOpen }) {
       "span",
       { className: "bt-set-copy" },
       (0, import_react44.createElement)("span", { className: "bt-im-title" }, t(conn.account?.name ?? shown.name)),
-      (0, import_react44.createElement)("span", { className: "bt-im-status" }, (0, import_react44.createElement)(Dot, { state }), [t(shown.name), stateText(conn, status), bot ? t("Talks to {bot}", { bot: bot.name }) : null].filter(Boolean).join(" · "))
+      (0, import_react44.createElement)("span", { className: "bt-im-status" }, (0, import_react44.createElement)(Dot, { state }), (0, import_react44.createElement)("span", { className: "bt-im-status-text" }, [t(shown.name), stateText(conn, status), bot ? t("Talks to {bot}", { bot: bot.name }) : null].filter(Boolean).join(" · ")))
     ),
     waiting > 0 ? (0, import_react44.createElement)("span", { className: "bt-im-count", "aria-label": t("{count} waiting for approval", { count: waiting }) }, waiting) : null,
     (0, import_react44.createElement)("span", { className: "bt-chevron" }, (0, import_react44.createElement)(ChevronRightIcon))
@@ -35200,8 +35212,10 @@ var IM_CSS = `
 .bt-app:not([data-state=ready]) .bt-im-mono{filter:grayscale(1);opacity:.5}
 .bt-im-title{font-size:14px;line-height:20px;font-weight:500;color:var(--bt-ink);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .bt-im-name{font-size:13px;line-height:18px;color:var(--bt-ink);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;min-width:0}
-.bt-im-status{display:flex;align-items:center;gap:6px;min-width:0;font-size:12px;line-height:16px;color:var(--bt-ink-3);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-[data-state=error]>.bt-set-copy>.bt-im-status{color:var(--bt-danger);white-space:normal}
+.bt-im-status{display:flex;align-items:center;gap:6px;min-width:0;font-size:12px;line-height:16px;color:var(--bt-ink-3)}
+.bt-im-status-text{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+[data-state=error]>.bt-set-copy>.bt-im-status{color:var(--bt-danger)}
+[data-state=error]>.bt-set-copy>.bt-im-status .bt-im-status-text{white-space:normal}
 .bt-im-dot{flex:none;width:7px;height:7px;border-radius:50%;corner-shape:round;background:var(--bt-ink-3)}
 .bt-im-dot[data-state=ready]{background:var(--bt-green)}
 .bt-im-dot[data-state=error]{background:var(--bt-danger)}
@@ -35900,7 +35914,18 @@ function ProvidersPage({ actions, run: run2, roster, Section: Section2, advanced
   (0, import_react48.useEffect)(() => {
     void apply2(actions.providers());
   }, []);
-  if (view === null) return null;
+  if (view === null) {
+    return (0, import_react48.createElement)(
+      Section2,
+      { title: t("Model providers") },
+      (0, import_react48.createElement)("div", { className: "bt-set-card" }, (0, import_react48.createElement)(
+        "div",
+        { className: "bt-set-row" },
+        (0, import_react48.createElement)("i", { className: "bt-loading-spin", "aria-hidden": true }),
+        t("Reading models…")
+      ))
+    );
+  }
   if (!view.available) return (0, import_react48.createElement)("p", { className: "bt-set-hint" }, t("This DSH cannot set up model providers."));
   const addBtn = adding ? null : (0, import_react48.createElement)("button", { type: "button", className: "bt-soft bt-soft-sm bt-with-icon", onClick: () => setAdding(true) }, (0, import_react48.createElement)(PlusIcon), t("Add a provider"));
   return [
@@ -36406,7 +36431,18 @@ function LocalAgentsPage({ run: run2, Row: Row4 }) {
   (0, import_react49.useEffect)(() => {
     void load("local-agents");
   }, []);
-  if (view === null) return null;
+  if (view === null) {
+    return (0, import_react49.createElement)(
+      "section",
+      { className: "bt-set-section" },
+      (0, import_react49.createElement)("div", { className: "bt-set-card" }, (0, import_react49.createElement)(
+        "div",
+        { className: "bt-set-row" },
+        (0, import_react49.createElement)("i", { className: "bt-loading-spin", "aria-hidden": true }),
+        t("Reading local agents…")
+      ))
+    );
+  }
   if (view.available === false) return (0, import_react49.createElement)("p", { className: "bt-set-hint" }, t("This DSH cannot register local agent routes."));
   return [
     (0, import_react49.createElement)(
