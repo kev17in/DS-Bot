@@ -302,10 +302,17 @@ function DetailView({ conn, status, roster, actions, onBack }) {
             h('span', { className: 'bt-im-name' }, chatName(conn, key, chat)),
             h('span', { className: 'bt-tag' }, chat.kind === 'group' ? t('Group') : t('Direct'))),
           h('span', { className: 'bt-set-control' },
+            // Each control says what it does: a small label above it, and a title
+            // with the longer story for whoever hovers.
+            h('span', { className: 'bt-im-opt' },
+              h('span', { className: 'bt-im-opt-label', title: t('Send each turn’s final answer to this chat') }, t('Push the final result')),
+              h(Switch, { on: chat.pushFinal !== false, label: t('Push the final result'), disabled: busy, onChange: on => run(actions.imChat(conn.id, { chatKey: key, pushFinal: on })) })),
             chat.kind === 'group'
-              ? h(TargetMenu, { value: chat.target ?? null, roster, rooms: true, label: t('Bound to'), disabled: busy, onPick: target => run(actions.imChat(conn.id, { chatKey: key, target })) })
+              ? h('span', { className: 'bt-im-opt' },
+                h('span', { className: 'bt-im-opt-label', title: t('Choose the Bot or group chat this chat talks to') }, t('Bound to')),
+                h(TargetMenu, { value: chat.target ?? null, roster, rooms: true, label: t('Bound to'), disabled: busy, onPick: target => run(actions.imChat(conn.id, { chatKey: key, target })) }))
               : null,
-            h('button', { type: 'button', className: 'bt-mini bt-im-danger', 'data-confirm': confirm === `c:${key}` || undefined, disabled: busy, onClick: () => ask(`c:${key}`, () => actions.imChat(conn.id, { chatKey: key, remove: true })) }, confirm === `c:${key}` ? t('Remove?') : t('Remove'))))))) : null,
+            h('button', { type: 'button', className: 'bt-mini bt-im-danger', title: t('Remove this chat binding'), 'data-confirm': confirm === `c:${key}` || undefined, disabled: busy, onClick: () => ask(`c:${key}`, () => actions.imChat(conn.id, { chatKey: key, remove: true })) }, confirm === `c:${key}` ? t('Remove?') : t('Remove'))))))) : null,
     h('div', { className: 'bt-set-card' },
       h('button', { type: 'button', className: 'bt-set-row bt-im-remove', 'data-confirm': confirm === 'conn' || undefined, disabled: busy, onClick: () => ask('conn', () => Promise.resolve(actions.imRemove(conn.id)).then(onBack)) },
         confirm === 'conn' ? t('Remove this IM bot? Its accounts and chats are removed too.') : t('Remove IM bot'))))
@@ -426,6 +433,8 @@ export const IM_CSS = `
 .bt-im-qr-box[data-state=error] .bt-im-qr-caption{color:var(--bt-danger);max-width:320px}
 .bt-im-chat-name{flex-direction:row;align-items:center;gap:8px}
 .bt-im-chat .bt-set-control{gap:8px}
+.bt-im-opt{display:flex;flex-direction:column;align-items:flex-end;gap:4px}
+.bt-im-opt-label{font-size:11px;line-height:14px;color:var(--bt-ink-2);cursor:help}
 .bt-im-danger:hover{color:var(--bt-danger)}
 .bt-im-danger[data-confirm]{color:var(--bt-danger);background:var(--bt-danger-soft)}
 .bt-im-remove{justify-content:center;color:var(--bt-danger)}
