@@ -448,7 +448,48 @@ export function install(rt) {
   // message of the turn before dropping the chat's origin (see the turn/start handler).
   const pendingReset = new Set()
   // Request id of an IM message → the chat it came from, until that message shows up.
+  // A message queued before a restart, or redelivered by the platform after it, used
+  // to finish its turn with no origin here, and its answer never reached the chat
+  // that asked. The mapping is id-addressed and small, so it persists in one file.
   const requests = new Map()
+  const requestsFile = join(imDir, 'requests.json')
+  const REQUEST_TTL_MS = 6 * 60 * 60 * 1000
+  let requestsTimer
+  const scheduleRequestsWrite = () => {
+    if (requestsTimer !== undefined) return
+    requestsTimer = setTimeout(() => {
+      requestsTimer = undefined
+      const now = Date.now()
+      for (const [id, entry] of requests) if (now - entry.at > REQUEST_TTL_MS) requests.delete(id)
+      if (rt.readOnly() !== undefined) return
+      const temp = `${requestsFile}.${process.pid}.tmp`
+      void mkdir(imDir, { recursive: true })
+        .then(() => writeFile(temp, JSON.stringify(Object.fromEntries(requests)), { encoding: 'utf8', mode: 0o600 }))
+        .then(() => replaceFile(temp, requestsFile))
+        .catch(async error => {
+          await rm(temp, { force: true }).catch(() => {})
+          rt.warn('ds-bot: im requests not saved: %s', error)
+        })
+    }, RUNTIME_SAVE_MS)
+    requestsTimer.unref?.()
+  }
+  const restoreRequests = async () => {
+    let data
+    try {
+      data = JSON.parse(await readFile(requestsFile, 'utf8'))
+    } catch (error) {
+      if (error?.code !== 'ENOENT') rt.warn('ds-bot: im requests not restored: %s', error)
+      return
+    }
+    const now = Date.now()
+    for (const [id, entry] of Object.entries(data ?? {})) {
+      if (typeof entry?.connId !== 'string' || typeof entry.chatKey !== 'string' || now - entry.at > REQUEST_TTL_MS) continue
+      requests.set(id, entry)
+    }
+  }
+  const consumeRequest = (requestId) => {
+    if (requests.delete(requestId)) scheduleRequestsWrite()
+  }
   // IM origin held across a part switch until the resumed/handoff message opens.
   const resumedOrigins = new Map()
   const holdImOrigin = (sessionId) => {
@@ -490,6 +531,7 @@ export function install(rt) {
       bound = conn === undefined ? undefined : bindingOf(conn, chatKey)
     }
     origins.set(sessionId, { connId, chatKey, senderId, binding: bound, at: Date.now() })
+    turnOrigins.set(sessionId, { connId, chatKey, senderId, binding: bound })
   }
   // A source that is not the chat this turn answers withdraws the origin for the
   // rest of the turn only: each message is judged by its own source, so a later IM
@@ -500,9 +542,16 @@ export function install(rt) {
     if (poison) mixed.add(sessionId)
     for (const [token, held] of resumedOrigins) if (held.activeOn === sessionId) resumedOrigins.delete(token)
   }
+  // The origin an IM message claimed in the running turn. A message typed in the
+  // Desktop window, a web answer or a schedule withdraws the live origin for the
+  // rest of the turn, but that turn's answer still owes the chat that asked, so
+  // turn/end falls back to this instead of going silent. It lives exactly one turn:
+  // claimOrigin sets it, turn/end spends it, resetOrigin clears it.
+  const turnOrigins = new Map()
   const resetOrigin = (sessionId) => {
     origins.delete(sessionId)
     mixed.delete(sessionId)
+    turnOrigins.delete(sessionId)
   }
   /**
    * The connection and chat a Session's replies go to, or undefined when nothing may
@@ -510,8 +559,7 @@ export function install(rt) {
    * paired, or the chat no longer pointing at the target whose turn asked. A card goes
    * out on this connection alone.
    */
-  const originOf = (sessionId) => {
-    const entry = sessionId === undefined ? undefined : origins.get(sessionId)
+  const originOfEntry = (entry) => {
     if (entry === undefined) return undefined
     const conn = Object.values(connections()).find(item => item.id === entry.connId)
     if (conn === undefined || !runners.has(conn.id)) return undefined
@@ -523,10 +571,15 @@ export function install(rt) {
     if (entry.binding === undefined || bindingOf(conn, entry.chatKey) !== entry.binding) return undefined
     return { conn, chatKey: entry.chatKey, chat }
   }
+  const originOf = (sessionId) => sessionId === undefined ? undefined : originOfEntry(origins.get(sessionId))
+  // The chat a turn's answer may still reach: the live origin, or — after another
+  // source withdrew it mid-turn — the one its IM message claimed when it started.
+  const answerableOf = (sessionId) => originOf(sessionId) ?? originOfEntry(turnOrigins.get(sessionId))
   const rememberRequest = (requestId, conn, chatKey, senderId) => {
     // The binding is captured when the message arrives, not when it is admitted: a chat
     // rebound while the message waits in the queue still answers the target that asked.
     requests.set(requestId, { connId: conn.id, chatKey, senderId, binding: bindingOf(conn, chatKey), at: Date.now() })
+    scheduleRequestsWrite()
   }
   // The Session a Bot writes into now, for a card that carries no Session of its own.
   const chatOfBot = botId => rt.botOf(botId) === undefined ? undefined : rt.chatOf(botId)
@@ -716,7 +769,7 @@ export function install(rt) {
       await rt.answerQuestion(found.sessionId, found.question.id, { selected: valid }, requestId)
       await settledEdits(conn)
     } catch (error) {
-      requests.delete(requestId)
+      consumeRequest(requestId)
       if (error?.code === 'bot/stale') {
         await settleCard(conn.id, held.cardKey, text('answered'))
         await sendCardReply(conn, chat, text('stale'))
@@ -1507,7 +1560,7 @@ export function install(rt) {
         // The chat this message came from is the one its turn answers. A message this
         // process never registered — after a restart, or a redelivery — leaves no origin.
         const asked = requests.get(rpcId)
-        requests.delete(rpcId)
+        consumeRequest(rpcId)
         if (asked === undefined) dropOrigin(session.id)
         else claimOrigin(session.id, asked.connId, asked.chatKey, asked.senderId, asked.binding)
       } else if (source?.kind === REPLY_KIND) {
@@ -1530,7 +1583,17 @@ export function install(rt) {
       const reason = event.data?.reason
       if (held !== undefined && (reason === undefined || reason.kind === 'completed')) {
         const body = held.trim()
-        const origin = originOf(session.id)
+        // The live origin went away when another source joined the turn — a message
+        // typed in the Desktop window, a web answer, a schedule — but the turn still
+        // owes the chat whose IM message started it, so the claim that turn opened
+        // with is the fallback. When even that cannot leave (unbound, unpaired, its
+        // connection gone), say so instead of dropping the answer in silence.
+        const claimed = turnOrigins.has(session.id)
+        const origin = answerableOf(session.id)
+        turnOrigins.delete(session.id)
+        if (origin === undefined && claimed && body !== '' && body !== HANDOFF_ACK) {
+          rt.warn('ds-bot: im answer of %s cannot reach its chat: the binding, the pairing or the connection is gone', session.id)
+        }
         if (origin !== undefined && origin.conn.chats?.[origin.chatKey]?.pushFinal !== false && body !== '' && body !== HANDOFF_ACK) {
           sendTo(origin.conn, origin.chatKey, { key: origin.chatKey, kind: origin.chat.kind, title: origin.chat.title }, body)
         }
@@ -1606,9 +1669,10 @@ export function install(rt) {
       void rt.refresh().then(() => sync()).catch(() => {})
     }, RECONCILE_MS)
     interval.unref?.()
-    void rt.load().then(() => sync()).catch(() => {})
+    void restoreRequests().then(() => rt.load()).then(() => sync()).catch(() => {})
     return () => {
       stopped = true
+      clearTimeout(requestsTimer)
       clearInterval(interval)
       resumedOrigins.clear()
       return Promise.all([...runners.keys()].map(stop)).then(async () => {

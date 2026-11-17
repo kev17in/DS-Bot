@@ -182,9 +182,12 @@ export default {
         const event = payload.event ?? {}
         const message = event.message ?? {}
         const direct = message.chat_type === 'p2p'
-        const mentioned = !direct && (message.mentions ?? []).some(m => m.id?.open_id === botOpenId || m.key === `@_user_${1}`)
+        // Only a mention of this very bot counts. The old '@_user_1' fallback took
+        // whoever was mentioned first for the bot, so a group message @-ing a
+        // person woke the Bot too.
+        const mentioned = !direct && botOpenId !== '' && (message.mentions ?? []).some(m => m.id?.open_id === botOpenId)
         const content = safeJson(message.content)
-        const text = String(content.text ?? '').replace(/@_user_\d+/g, '').trim()
+        const text = messageText(message, content)
         const images = []
         if (message.message_type === 'image' && content.image_key !== undefined) {
           const bytes = await freshToken()
@@ -195,11 +198,39 @@ export default {
             images.push({ mediaType: imageMediaType(buffer), data: buffer.toString('base64') })
           } else env.log?.warn?.('ds-bot im: feishu image download failed for %s', String(message.message_id ?? ''))
         }
+        // A file message carries its bytes instead of text; the quoted message it
+        // replies to, when there is one, is fetched so a quote-and-@ also works.
+        const files = []
+        const fileOf = async (messageId, held) => {
+          const bytes = await freshToken()
+            .then(bearer => resource(env, apiBase(env, fields), bearer, messageId, held.file_key, 'file'))
+            .catch(() => undefined)
+          if (bytes === undefined) return false
+          files.push({ name: String(held.file_name ?? 'file'), data: Buffer.from(bytes) })
+          return true
+        }
+        if (message.message_type === 'file' && content.file_key !== undefined) {
+          if (!await fileOf(message.message_id, content)) env.log?.warn?.('ds-bot im: feishu file download failed for %s', String(message.message_id ?? ''))
+        }
+        let quoted
+        if (typeof message.parent_id === 'string' && message.parent_id !== '') {
+          const held = await rest(`/open-apis/im/v1/messages/${message.parent_id}`, { method: 'GET' }).catch(() => undefined)
+          const heldMessage = held?.data?.items?.[0]
+          const heldContent = safeJson(heldMessage?.body?.content)
+          if (heldMessage?.msg_type === 'file' && heldContent.file_key !== undefined) {
+            await fileOf(String(heldMessage.message_id ?? ''), heldContent)
+          } else {
+            const heldText = messageText({ message_type: heldMessage?.msg_type }, heldContent)
+            if (heldText !== '') quoted = heldText.slice(0, 2000)
+          }
+        }
+        const body = quoted === undefined || quoted === '' ? text
+          : `${text === '' ? '' : `${text}\n\n`}Quoted message:\n${quoted}`
         const sender = event.sender?.sender_id?.open_id ?? event.sender?.user_id ?? ''
         await handlers.onMessage({
           chat: { key: String(message.chat_id ?? ''), kind: direct ? 'direct' : 'group', title: String(message.chat_id ?? '') },
           sender: { id: String(sender), name: String(sender) },
-          text, images, files: [],
+          text: body, images, files,
           mentioned, messageId: String(message.message_id ?? ''),
         })
       }
@@ -440,6 +471,27 @@ export default {
 
 const safeJson = (text) => { try { return JSON.parse(text ?? '{}') } catch { return {} } }
 const toMarkdown = text => String(text ?? '')
+
+// The text of a message, whatever its type: 'text' carries it plainly, 'post'
+// nests it under content as rows of elements, and a reply quotes with either.
+// Mention placeholders never reach the Bot, and an 'at' element is dropped the
+// same way so a rich-text @-mention does not leak into the prompt.
+const messageText = (message, content) => {
+  const strip = value => String(value ?? '').replace(/@_user_\d+/g, '')
+  if (message?.message_type === 'post') {
+    const out = []
+    const walk = (node) => {
+      if (Array.isArray(node)) { node.forEach(walk); return }
+      if (node?.tag === 'text') out.push(String(node.text ?? ''))
+      else if (node?.tag === 'a' && node.href !== undefined) out.push(`${node.text ?? ''} (${node.href})`)
+    }
+    walk(content?.content)
+    const title = strip(content?.title).trim()
+    const body = out.join('').trim()
+    return title === '' || body === '' ? (title || body) : `${title}\n${body}`
+  }
+  return strip(content?.text).trim()
+}
 
 function imageMediaType(bytes) {
   if (bytes.subarray(0, 8).equals(Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]))) return 'image/png'

@@ -263,6 +263,30 @@ test('outbound: assistant text and member lines go out; hidden turns, user and s
   assert.equal(s.fake.sent[1].chat.key, 'g1')
 })
 
+test('a message typed in the open Desktop window mid-turn does not silence the chat that asked', async (t) => {
+  const s = await start()
+  t.after(s.stop)
+  const conn = await add(s)
+  const one = s.rt.state.im.connections[conn.id]
+  one.paired.push({ id: 'u1', name: 'U1', at: 1 })
+  await s.rt.save()
+  await dm(s, 'u1', 'hi')
+  s.imTurn('a')
+  s.emitEvent('a', 'assistant/message', { message: { content: [{ type: 'text', text: 'the answer' }] } })
+  // The same turn, a source with no IM request: a message typed in the Desktop
+  // window withdraws the live origin, but the turn still owes the chat its answer.
+  s.emitEvent('a', 'user/message', { source: { kind: 'user' }, content: [{ type: 'text', text: 'typed in the window' }] })
+  s.emitEvent('a', 'turn/end', { reason: { kind: 'completed' } })
+  assert.equal(s.fake.sent.length, 1)
+  assert.equal(s.fake.sent[0].text, 'the answer')
+  assert.equal(s.fake.sent[0].chat.key, 'dm-u1')
+  // The spent fallback does not leak into a later turn that no IM message asked for.
+  s.emitEvent('a', 'turn/start', { turn: 2 })
+  s.emitEvent('a', 'assistant/message', { message: { content: [{ type: 'text', text: 'later' }] } })
+  s.emitEvent('a', 'turn/end', { reason: { kind: 'completed' } })
+  assert.equal(s.fake.sent.length, 1)
+})
+
 test('IM user messages are tagged by seq for the current part; a part that is no longer current drops out', async (t) => {
   const s = await start()
   t.after(s.stop)

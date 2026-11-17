@@ -185,6 +185,57 @@ test('a ping gets a pong, a p2p is direct, a group counts only with a mention, d
   await until(() => fake.frames.filter(({ frame }) => frame.method === 1 && frame.headers.some(h => h.key === 'biz_rt')).length === 3)
 })
 
+test('a group mention of someone else does not wake the bot, a quote-and-@ carries the quoted text', async (t) => {
+  const fake = await fakeFeishu()
+  fake.replies['/open-apis/im/v1/messages/om_q'] = { result: { code: 0, data: { items: [{ message_id: 'om_q', msg_type: 'text', body: { content: JSON.stringify({ text: 'earlier note' }) } }] } } }
+  const messages = []
+  const handle = feishu.connect(FIELDS, env(fake), { onMessage: async msg => { messages.push(msg) }, onAction() {}, onStatus() {} })
+  t.after(() => { handle.stop(); fake.close() })
+  const ws = await until(() => fake.sockets[0])
+  fake.push(ws, fake.dataFrame('event', message({ chat_type: 'group', chat_id: 'oc_2', message_id: 'om_4', message_type: 'text', content: JSON.stringify({ text: '@_user_1 noise' }), mentions: [{ key: '@_user_1', id: { open_id: 'ou_human' } }] }), { messageId: 'fm4' }))
+  fake.push(ws, fake.dataFrame('event', message({ chat_type: 'group', chat_id: 'oc_2', message_id: 'om_5', message_type: 'text', parent_id: 'om_q', content: JSON.stringify({ text: '@_user_1 explain' }), mentions: [{ key: '@_user_1', id: { open_id: 'ou_bot' } }] }), { messageId: 'fm5' }))
+  await until(() => messages.length === 2)
+  assert.equal(messages[0].mentioned, false)
+  assert.equal(messages[1].mentioned, true)
+  assert.equal(messages[1].text, 'explain\n\nQuoted message:\nearlier note')
+})
+
+test('a rich-text post that mentions the bot reaches it as plain text', async (t) => {
+  const fake = await fakeFeishu()
+  const messages = []
+  const handle = feishu.connect(FIELDS, env(fake), { onMessage: async msg => { messages.push(msg) }, onAction() {}, onStatus() {} })
+  t.after(() => { handle.stop(); fake.close() })
+  const ws = await until(() => fake.sockets[0])
+  fake.push(ws, fake.dataFrame('event', message({
+    chat_type: 'group', chat_id: 'oc_2', message_id: 'om_6', message_type: 'post',
+    content: JSON.stringify({ title: 't', content: [[{ tag: 'at', user_id: 'ou_bot' }, { tag: 'text', text: ' look at ' }, { tag: 'a', text: 'this', href: 'https://x' }]] }),
+    mentions: [{ key: '@_user_1', id: { open_id: 'ou_bot' } }],
+  }), { messageId: 'fm6' }))
+  await until(() => messages.length === 1)
+  assert.equal(messages[0].mentioned, true)
+  assert.equal(messages[0].text, 't\nlook at this (https://x)')
+})
+
+test('a file message and a quoted file are downloaded and passed through as files', async (t) => {
+  const fake = await fakeFeishu()
+  fake.resources['/open-apis/im/v1/messages/om_7/resources/file_1?type=file'] = Buffer.from('file-body')
+  fake.resources['/open-apis/im/v1/messages/om_f/resources/file_1?type=file'] = Buffer.from('file-body')
+  fake.replies['/open-apis/im/v1/messages/om_f'] = { result: { code: 0, data: { items: [{ message_id: 'om_f', msg_type: 'file', body: { content: JSON.stringify({ file_key: 'file_1', file_name: 'a.txt' }) } }] } } }
+  const messages = []
+  const handle = feishu.connect(FIELDS, env(fake), { onMessage: async msg => { messages.push(msg) }, onAction() {}, onStatus() {} })
+  t.after(() => { handle.stop(); fake.close() })
+  const ws = await until(() => fake.sockets[0])
+  fake.push(ws, fake.dataFrame('event', message({ chat_type: 'p2p', chat_id: 'oc_1', message_id: 'om_7', message_type: 'file', content: JSON.stringify({ file_key: 'file_1', file_name: 'a.txt' }) }), { messageId: 'fm7' }))
+  fake.push(ws, fake.dataFrame('event', message({ chat_type: 'p2p', chat_id: 'oc_1', message_id: 'om_8', message_type: 'text', parent_id: 'om_f', content: JSON.stringify({ text: 'read this' }) }), { messageId: 'fm8' }))
+  await until(() => messages.length === 2)
+  assert.deepEqual(Object.keys(messages[0].files[0]).sort(), ['data', 'name'])
+  assert.equal(messages[0].files[0].name, 'a.txt')
+  assert.equal(messages[0].files[0].data.toString('utf8'), 'file-body')
+  assert.equal(messages[1].files[0].name, 'a.txt')
+  assert.equal(messages[1].files[0].data.toString('utf8'), 'file-body')
+  assert.equal(messages[1].text, 'read this')
+})
+
 for (const [mediaType, bytes] of [
   ['image/png', Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a])],
   ['image/jpeg', Buffer.from([0xff, 0xd8, 0xff, 0xe0])],
