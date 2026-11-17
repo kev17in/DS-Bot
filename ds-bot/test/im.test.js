@@ -287,6 +287,37 @@ test('a message typed in the open Desktop window mid-turn does not silence the c
   assert.equal(s.fake.sent.length, 1)
 })
 
+test('a turn the chat asked never ends in silence: no text means the fallback notice', async (t) => {
+  const s = await start()
+  t.after(s.stop)
+  const conn = await add(s)
+  const one = s.rt.state.im.connections[conn.id]
+  one.paired.push({ id: 'u1', name: 'U1', at: 1 })
+  await s.rt.save()
+  await dm(s, 'u1', 'hi')
+  s.imTurn('a')
+  s.fake.sent.length = 0
+  // The model wrote nothing at all: the turn still owes the chat one message.
+  s.emitEvent('a', 'turn/end', { reason: { kind: 'completed' } })
+  assert.equal(s.fake.sent.length, 1)
+  assert.equal(s.fake.sent[0].chat.key, 'dm-u1')
+  assert.ok(s.fake.sent[0].text.length > 0, 'a notice, not silence')
+  // A turn that failed or was stopped still says nothing, and a question card
+  // waiting for its answer is a reply of its own.
+  await dm(s, 'u1', 'again')
+  s.imTurn('a')
+  s.fake.sent.length = 0
+  s.emitEvent('a', 'turn/end', { reason: { kind: 'stopped' } })
+  assert.equal(s.fake.sent.length, 0, 'a stopped turn stays silent')
+  await dm(s, 'u1', 'pick one')
+  s.imTurn('a')
+  s.rt.state.questions.a = { id: 'q9', question: 'Pick', options: [{ label: 'x' }] }
+  await s.rt.save()
+  await s.flush()
+  s.fake.sent.length = 0
+  s.emitEvent('a', 'turn/end', { reason: { kind: 'completed' } })
+  assert.equal(s.fake.sent.length, 0, 'an open question card is the reply')
+})
 test('IM user messages are tagged by seq for the current part; a part that is no longer current drops out', async (t) => {
   const s = await start()
   t.after(s.stop)
@@ -832,7 +863,10 @@ test('reply origin: the turn ending stops later output from going out', async (t
   s.emitEvent('a', 'turn/end', {})
   s.emitEvent('a', 'assistant/message', { message: { content: [{ type: 'text', text: 'late' }] } })
   await s.flush()
-  assert.equal(s.fake.sent.length, 0)
+  // The turn the chat asked ended with no reply: the guarantee notice goes out,
+  // and the late text after the turn still adds nothing.
+  assert.equal(s.fake.sent.length, 1)
+  assert.notEqual(s.fake.sent[0].text, 'late')
 })
 
 test('reply origin: an IM message this process never registered sends nothing', async (t) => {
