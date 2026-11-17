@@ -47,6 +47,7 @@ const IPC = {
   browserImportCancel: 'ds-bot:browser-import-cancel',
   appUpdateState: 'ds-bot:app-update-state', appUpdateCheck: 'ds-bot:app-update-check',
   appUpdateInstall: 'ds-bot:app-update-install', appUpdateOpen: 'ds-bot:app-update-open',
+  appUpdateAuto: 'ds-bot:app-update-auto', appUpdateAutoSet: 'ds-bot:app-update-auto-set',
   appUpdateChanged: 'ds-bot:app-update-changed',
   idleSeconds: 'ds-bot:idle-seconds', computer: 'ds-bot:computer', computerAction: 'ds-bot:computer-action', computerCursor: 'ds-bot:computer-cursor',
   notify: 'ds-bot:notify', notifyStatus: 'ds-bot:notify-status', badge: 'ds-bot:badge', openSession: 'ds-bot:open-session',
@@ -912,6 +913,17 @@ function handleIpc() {
       void electronShell.openExternal(state.page)
     }
   })
+  // The automatic-update switch: off means no check, download or prompt on its own; the
+  // About row's manual check still works, and a download that finished stays offered.
+  ipcMain.handle(IPC.appUpdateAuto, () => autoUpdates)
+  ipcMain.handle(IPC.appUpdateAutoSet, (event, on) => {
+    assertWindow(event)
+    autoUpdates = on !== false
+    writeAutoUpdates(autoUpdates)
+    if (autoUpdates) updates?.enable?.()
+    else updates?.disable?.()
+    return autoUpdates
+  })
   // The plugin keeps the team workspace; the app remembers it for its own checks.
   ipcMain.on(IPC.teamWorkspace, (event, path) => {
     if (fixed || !fromWindow(event) || typeof path !== 'string' || !isAbsolute(path)) return
@@ -1141,7 +1153,24 @@ async function runMove(to, workspace) {
 }
 
 // Windows and a Linux AppImage update themselves; macOS and a Linux deb ask to download the new
-// version. Throwaway runs check only a given feed and never ask.
+// version. Throwaway runs check only a given feed and never ask. The user can turn the automatic
+// part off; the choice lives in updates.json in the app's own data and defaults to on.
+const autoUpdatesFile = () => join(app.getPath('userData'), 'updates.json')
+function readAutoUpdates() {
+  try {
+    return JSON.parse(readFileSync(autoUpdatesFile(), 'utf8')).auto !== false
+  } catch {
+    return true
+  }
+}
+function writeAutoUpdates(auto) {
+  try {
+    writeFileSync(autoUpdatesFile(), JSON.stringify({ auto }))
+  } catch (error) {
+    console.error('DS Bot: the auto-update choice was not saved:', error)
+  }
+}
+let autoUpdates = readAutoUpdates()
 function startUpdates() {
   const feed = process.env.DS_BOT_UPDATE_URL || undefined
   const throwaway = Boolean(process.env.DS_BOT_HOME)
@@ -1149,6 +1178,7 @@ function startUpdates() {
   if (process.platform === 'darwin') {
     return watchReleases({
       current: app.getVersion(), arch: process.arch, feed, ask: throwaway ? undefined : (version) => downloadPrompt.prompt(version), open: url => electronShell.openExternal(url),
+      auto: autoUpdates,
     })
   }
   // electron-updater's Linux updater works only from inside an AppImage (APPIMAGE is set there);
@@ -1159,6 +1189,7 @@ function startUpdates() {
     return watchReleases({
       current: app.getVersion(), arch: process.arch, feed, ask: throwaway ? undefined : (version) => downloadPrompt.prompt(version), open: url => electronShell.openExternal(url),
       asset: version => `DS-Bot-${version}-linux-${debArch}.deb`,
+      auto: autoUpdates,
     })
   }
   if (process.platform === 'win32' || process.platform === 'linux') {
@@ -1167,6 +1198,7 @@ function startUpdates() {
     return watchUpdates({
       updater: electronUpdater.autoUpdater, feed, ask: throwaway ? undefined : (version) => restartPrompt.prompt(version),
       beforeInstall: () => { shell.beginQuit(); return stopHost() },
+      auto: autoUpdates,
     })
   }
   return undefined

@@ -8,7 +8,7 @@ import { join } from 'node:path'
 import { replaceFile } from '../files.js'
 import { viewCardText } from '../parts.js'
 import { imPlatform, IM_PLATFORMS } from '../../shared/im-platforms.js'
-import { REPLY_KIND, SOURCE_KIND } from '../constants.js'
+import { HANDOFF_ACK, REPLY_KIND, SOURCE_KIND } from '../constants.js'
 import { adapters } from './platforms/index.js'
 
 const RECONCILE_MS = 15_000
@@ -476,7 +476,7 @@ export function install(rt) {
     if (mixed.has(sessionId)) return
     const previous = origins.get(sessionId)
     if (previous !== undefined && (previous.connId !== connId || previous.chatKey !== chatKey || previous.senderId !== senderId)) {
-      dropOrigin(sessionId)
+      dropOrigin(sessionId, true)
       return
     }
     for (const [token, held] of resumedOrigins) {
@@ -491,9 +491,13 @@ export function install(rt) {
     }
     origins.set(sessionId, { connId, chatKey, senderId, binding: bound, at: Date.now() })
   }
-  const dropOrigin = (sessionId) => {
+  // A source that is not the chat this turn answers withdraws the origin for the
+  // rest of the turn only: each message is judged by its own source, so a later IM
+  // message of the same turn claims the origin back. Only two IM chats colliding
+  // in one turn (claimOrigin's poison) silence the turn as a whole.
+  const dropOrigin = (sessionId, poison = false) => {
     origins.delete(sessionId)
-    mixed.add(sessionId)
+    if (poison) mixed.add(sessionId)
     for (const [token, held] of resumedOrigins) if (held.activeOn === sessionId) resumedOrigins.delete(token)
   }
   const resetOrigin = (sessionId) => {
@@ -705,8 +709,11 @@ export function install(rt) {
     const requestId = `im:${conn.platform}:${randomUUID()}`
     rememberRequest(requestId, conn, chat.key, senderId)
     try {
-      await rt.answerQuestion(found.sessionId, found.question.id, { selected: valid }, requestId)
+      // Settle the chosen label before the answer removes the question: the save
+      // inside answerQuestion fires onSaved, whose settleGone would otherwise
+      // stamp a generic "answered" here first (settleCard never overwrites).
       await settleCard(conn.id, held.cardKey, valid.join(', '))
+      await rt.answerQuestion(found.sessionId, found.question.id, { selected: valid }, requestId)
       await settledEdits(conn)
     } catch (error) {
       requests.delete(requestId)
@@ -768,6 +775,13 @@ export function install(rt) {
     const body = String(msg.text ?? '').trim()
     const chat = conn.chats[msg.chat.key]
     const target = resolveTarget(conn, chat)
+    // A reaction marks the message as received where the platform can do it. The
+    // call is absent on other platforms and its failure never touches the
+    // message's own path through here.
+    const react = runners.get(conn.id)?.handle?.react
+    if (msg.messageId !== undefined && react !== undefined) {
+      react(msg.chat, msg.messageId).catch(error => rt.warn('ds-bot: im reaction failed: %s', error))
+    }
     if (/^\/start(?:@\S+)?\s*$/.test(body)) {
       const name = target === undefined ? undefined : targetName(conn, target)
       await sendText(conn, msg.chat, name === undefined ? text(msg.chat.kind === 'group' ? 'unboundGroup' : 'unbound') : text('greeting', { name }))
@@ -955,8 +969,25 @@ export function install(rt) {
       }
     }
   }
-
-  // Buttons drop and the answer shows wherever the card was settled.
+  // Buttons drop and the answer shows wherever the card was settled. A settled
+  // question marks its chosen options in place (✅ on the option line) rather
+  // than appending the answer after the list; anything else keeps the old form.
+  const markedBody = (entry) => {
+    if (entry.text === undefined) return `(${text('answered')})`
+    const chosen = String(entry.answer ?? '').split(',').map(part => part.trim()).filter(part => part !== '')
+    if (chosen.length === 0) return `${entry.text}\n— ${entry.answer}`
+    let marked = 0
+    const lines = entry.text.split('\n').map(line => {
+      const match = /^(\s*\d+\.\s+)(.+)$/.exec(line)
+      if (match === null) return line
+      const rest = match[2]
+      const hit = chosen.some(label => rest === label || rest.startsWith(`${label} —`) || rest.startsWith(`${label} -`) || rest.startsWith(`${label}(`))
+      if (!hit) return line
+      marked += 1
+      return `✅ ${line}`
+    })
+    return marked > 0 ? lines.join('\n') : `${entry.text}\n— ${entry.answer}`
+  }
   const settledEdits = async (conn) => {
     const runner = runners.get(conn.id)
     const data = runtimes.get(conn.id)?.data
@@ -967,8 +998,8 @@ export function install(rt) {
         const chat = conn.chats?.[entry.chatKey]
         if (chat === undefined) continue
         entry.edited = true
-        const body = entry.text !== undefined ? `${entry.text}\n— ${entry.answer}` : `(${text('answered')})`
-        runner.handle.edit({ key: entry.chatKey, kind: chat.kind, title: chat.title }, entry.messageId, { text: body }).catch(() => {})
+        runner.handle.edit({ key: entry.chatKey, kind: chat.kind, title: chat.title }, entry.messageId, { text: markedBody(entry) })
+          .catch(error => rt.warn('ds-bot: im card edit failed %s: %s', entry.messageId, error))
         scheduleWrite(conn.id)
       }
     }
@@ -1321,6 +1352,11 @@ export function install(rt) {
       if (chat === undefined) throw new Error('No such chat')
       if (body.remove === true) {
         delete conn.chats[String(body.chatKey ?? '')]
+      } else if (body.pushFinal !== undefined) {
+        // Absent keeps the default: a binding's turn answers reach its chat. Only an
+        // explicit opt-out silences the final result for this binding alone.
+        if (body.pushFinal === false) chat.pushFinal = false
+        else delete chat.pushFinal
       } else if (body.target === null) {
         delete chat.target
       } else if (body.target !== undefined) {
@@ -1427,6 +1463,20 @@ export function install(rt) {
   }
 
   // ----------------------------------------------------------------- outbound
+  // Only a turn's final answer goes out. A turn narrates as it works ("let me look",
+  // "found it"), and every one of those lines used to reach the chat, which buried
+  // the answer under progress. So a Bot's text is held here while its turn runs, and
+  // turn/end sends just the last piece of it — the answer — when the turn ended by
+  // itself, to the chat whose claim the same event ends. A turn that failed, was
+  // stopped, or ran out of room says nothing, and a turn that goes on after a tool
+  // call keeps holding until it really ends. The text is kept per Session rather
+  // than per turn: displayItems is called here with one event and no Session, so the
+  // turn number it would stamp is not available, while a Session runs one turn at a
+  // time anyway. Cards never come through here: diffCards sends questions,
+  // approvals, secret requests and views the moment they open, so whatever asks for
+  // an answer or a permission still arrives at once.
+  const heldText = new Map()  // sessionId -> last held text
+
   ctx.on('session/event', (session, event) => {
     if (event.type === 'turn/start') {
       const room = rt.roomOf(session.id)
@@ -1473,6 +1523,18 @@ export function install(rt) {
       }
     }
     if (event.type === 'turn/end') {
+      // The turn ended on its own: what it last said is its answer, and it goes to
+      // the chat that asked before the same event ends that chat's claim below.
+      const held = heldText.get(session.id)
+      heldText.delete(session.id)
+      const reason = event.data?.reason
+      if (held !== undefined && (reason === undefined || reason.kind === 'completed')) {
+        const body = held.trim()
+        const origin = originOf(session.id)
+        if (origin !== undefined && origin.conn.chats?.[origin.chatKey]?.pushFinal !== false && body !== '' && body !== HANDOFF_ACK) {
+          sendTo(origin.conn, origin.chatKey, { key: origin.chatKey, kind: origin.chat.kind, title: origin.chat.title }, body)
+        }
+      }
       // A group's own Session ends its relay turn at once while its members keep
       // working and post later; only a Bot's turn ending ends the chat's claim. A
       // pending reset means the turn never got a message to classify, so apply it now.
@@ -1487,13 +1549,20 @@ export function install(rt) {
     if (botId === undefined) {
       // A group's own chat has no Bot of its own; its lines go out from onRoomLine.
       imVia.delete(session.id)
+      heldText.delete(session.id)
       return
     }
     const origin = originOf(session.id)
     if (origin === undefined) return
     for (const item of rt.displayItems(session.id, [event])) {
-      if (item.kind !== 'bot' && item.kind !== 'view') continue
-      const body = item.kind === 'bot' ? item.text : viewCardText({ title: item.title, view: item.view }) || (item.title ?? '')
+      if (item.kind === 'bot') {
+        heldText.set(session.id, item.text)
+        continue
+      }
+      // A view is a result drawn, not progress, and it asks nothing back: it goes
+      // out as it is drawn.
+      if (item.kind !== 'view') continue
+      const body = viewCardText({ title: item.title, view: item.view }) || (item.title ?? '')
       sendTo(origin.conn, origin.chatKey, { key: origin.chatKey, kind: origin.chat.kind, title: origin.chat.title }, body)
     }
   })

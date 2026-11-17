@@ -9,6 +9,7 @@ import { SPRING_POP } from './motion.js'
 import { BotMark } from './mark.js'
 import { MAIN_LOOK } from './characters.js'
 import { showsDshRow } from './dsh-offer.js'
+import { Switch } from './bot-settings.js'
 
 // The length of the mark's `done` hop (bt-done in styles.js).
 const CHEER_MS = 1800
@@ -43,6 +44,7 @@ export function ownAppRow(ownApp) {
     case 'downloaded': return { hint: t('{version} is ready; it installs when you restart', { version }), button: 'restart' }
     case 'available': return { hint: t('{version} is available', { version }), button: 'open' }
     case 'failed': return { hint: t('Could not check for updates.'), button: 'check' }
+    case 'off': return { hint: t('Automatic updates are off.'), button: 'check' }
     default: return null
   }
 }
@@ -108,6 +110,21 @@ export function AboutPage({ useUpdate, actions, run, Section, Row }) {
             dshPhase === 'installing' ? t('Updating…') : dshPhase === 'failed' ? t('Try again') : t('Update'))
         : null
   const repo = update.repoUrl
+  // The desktop app's automatic-update switch. Off stops the checks, downloads and prompts
+  // on their own; the manual check button keeps working. Null hides the row (DSH Web).
+  const [auto, setAuto] = useState(null)
+  useEffect(() => {
+    let live = true
+    void actions.ownAppAuto?.().then(value => { if (live && typeof value === 'boolean') setAuto(value) }, () => {})
+    return () => { live = false }
+  }, [])
+  const autoRow = update.source === 'app' && auto !== null
+    ? h(Row, { label: t('Update automatically'), hint: t('Check for updates and install them in the background') },
+      h(Switch, { on: auto, label: t('Update automatically'), onChange: next => {
+        setAuto(next)
+        void actions.setOwnAppAuto?.(next)
+      } }))
+    : null
   return [
     h('div', { key: 'hero', className: 'bt-about-hero' },
       h('span', { className: 'bt-about-mark' }, h(BotMark, { look: MAIN_LOOK, bot: { id: 'about' }, size: 52, state: markState, live: true, gaze: true, pokeable: true })),
@@ -122,6 +139,7 @@ export function AboutPage({ useUpdate, actions, run, Section, Row }) {
       stars === null ? null : h('span', { className: 'bt-star-count' }, starCount(stars))) : null),
     repo ? h('p', { key: 'ask', className: 'bt-about-ask' }, t('If DS Bot helps you, a star on GitHub helps more people find it.')) : null,
     h(Section, { key: 'updates', title: t('Updates') },
+      autoRow,
       h(Row, { label: 'DS Bot', hint: ownRow?.hint ?? botHint(update) }, botControl, update.available && update.notesUrl ? h('a', linkProps(update.notesUrl), t("What's new")) : null),
       dsh?.current ? h(Row, { label: 'DeepSeek Harness', hint: dshHint(dsh, dshShown) }, dshControl) : null),
     h(Section, { key: 'links', title: t('Links') },

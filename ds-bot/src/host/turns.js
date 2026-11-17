@@ -328,7 +328,7 @@ export function install(rt) {
     for (const childId of childIds) {
       rememberStopped(stoppedSubagents, childId)
       // Not in the plugin's inject list, where ctx.subagents throws; interrupt can throw too.
-      try { await ctx.get?.('subagents')?.interrupt?.(childId, { kind: 'user', parentSessionId: sessionId }) } catch {}
+      try { await ctx.get?.('subagents')?.interrupt?.(childId, { kind: 'user', parentSessionId: sessionId }) } catch (error) { rt.warn('ds-bot: subagent %s of %s did not interrupt: %s', childId, sessionId, error?.message ?? error) }
       const childAgent = ctx.get?.('agents')?.get?.(childId)
       if (childAgent !== undefined) {
         try { childAgent.cancel?.({ kind: 'user' }) } catch {}
@@ -398,14 +398,17 @@ export function install(rt) {
     await rt.load()
     const sessionId = rt.chatOf(botId)
     if (sessionId === undefined) return false
+    const agent = await rt.resolveAgent(sessionId).catch(() => undefined)
+    // The live map is process memory: a reload that did not adopt the turn leaves
+    // it empty while dsh still runs the Agent, so the registry decides too.
     const turnRunning = live.get(sessionId)?.turn !== undefined
     const subRunning = hasSubagents?.(sessionId) === true
-    if (!turnRunning && !subRunning) return false
+    if (!turnRunning && !subRunning && agent?.status !== 'running') return false
     await stopSubagents(sessionId)
-    if (turnRunning) {
-      const agent = await rt.resolveAgent(sessionId).catch(() => undefined)
-      agent?.cancel?.({ kind: 'user' })
-    }
+    if (turnRunning || agent?.status === 'running') agent?.cancel?.({ kind: 'user' })
+    // A stop ends the conversation, not just the current turn: anything already
+    // waiting to start the next turn would answer after the user stopped.
+    for (const message of Array.from(agent?.inbox?.nextTurn ?? [])) agent.inbox?.remove(message.id)
     return true
   }
 
@@ -449,19 +452,30 @@ export function install(rt) {
     showCall(id, entry)
   }
 
+  // Exchange turns change in bursts while work runs, and each mark wrote the whole
+  // state; a trailing debounce keeps one burst to one write without dropping the last.
+  let exchangeSaveTimer
+  const scheduleExchangeSave = () => {
+    if (exchangeSaveTimer !== undefined) return
+    exchangeSaveTimer = setTimeout(() => {
+      exchangeSaveTimer = undefined
+      void rt.save().catch(() => {})
+    }, 400)
+    exchangeSaveTimer.unref?.()
+  }
   const markExchangeTurn = (sessionId, turn) => {
     const turns = state.exchangeTurns[sessionId] ??= []
     if (!turns.includes(turn)) {
       turns.push(turn)
       if (turns.length > 400) turns.splice(0, turns.length - 400)
-      void rt.save().catch(() => {})
+      scheduleExchangeSave()
     }
   }
   const unmarkExchangeTurn = (sessionId, turn) => {
     const turns = state.exchangeTurns[sessionId] ?? []
     if (!turns.includes(turn)) return
     state.exchangeTurns[sessionId] = turns.filter(other => other !== turn)
-    void rt.save().catch(() => {})
+    scheduleExchangeSave()
   }
 
   // A request whose audience is the user is answered in the recipient's own chat: that

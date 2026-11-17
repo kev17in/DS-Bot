@@ -14,12 +14,14 @@ const fakeAdapter = ({ buttons = true } = {}) => {
   const sent = []
   const edited = []
   const typed = []
+  const reacted = []
   const fails = []
   const adapter = {
     id: 'fake',
     sent,
     edited,
     typed,
+    reacted,
     handlers: null,
     async check(fields) {
       if (fields.token === 'bad-token') throw new Error('platform refused the token')
@@ -38,6 +40,7 @@ const fakeAdapter = ({ buttons = true } = {}) => {
           return { messageId: sent.length }
         },
         edit: async (chat, messageId, body) => { edited.push({ chat, messageId, ...body }) },
+        react: async (chat, messageId) => { reacted.push({ chat, messageId }) },
         typing: async (chat) => { typed.push(chat) },
         stop: () => { adapter.stopped = (adapter.stopped ?? 0) + 1 },
       }
@@ -115,7 +118,11 @@ async function start({ platform = 'telegram', adapter, seed, services = {} } = {
     emitEvent(sessionId, 'turn/start', { turn: prompts.length })
     emitEvent(sessionId, 'user/message', { source: { kind: 'user', rpcId: requestId }, content: [{ type: 'text', text: 'from the chat' }] })
   }
-  return { ctx, rt, home, fake, prompts, agents, agentOf, emitEvent, fireApprovals, imTurn, stop, flush, platform }
+  // A Bot's text is held until its turn ends; only the final answer goes out.
+  const imEnd = (sessionId = 'a') => {
+    emitEvent(sessionId, 'turn/end', { reason: { kind: 'completed' } })
+  }
+  return { ctx, rt, home, fake, prompts, agents, agentOf, emitEvent, fireApprovals, imTurn, imEnd, stop, flush, platform }
 }
 
 const FIELDS = { telegram: { token: 'tok-1234' }, dingtalk: { clientId: 'cli-1', clientSecret: 'sec-1234' } }
@@ -232,10 +239,13 @@ test('outbound: assistant text and member lines go out; hidden turns, user and s
   s.imTurn('a')
   s.fake.sent.length = 0
   s.emitEvent('a', 'assistant/message', { message: { content: [{ type: 'text', text: 'visible reply' }] } })
+  assert.equal(s.fake.sent.length, 0, 'in-turn text is held back')
+  s.emitEvent('a', 'turn/end', { reason: { kind: 'completed' } })
   assert.equal(s.fake.sent.length, 1)
   assert.equal(s.fake.sent[0].text, 'visible reply')
   s.rt.state.exchangeTurns.a = [7]
   s.emitEvent('a', 'assistant/message', { message: { content: [{ type: 'text', text: 'hidden' }] }, turn: 7 })
+  s.emitEvent('a', 'turn/end', { reason: { kind: 'completed' } })
   s.emitEvent('a', 'user/message', { source: { kind: 'user' }, content: [{ type: 'text', text: 'user typed' }] })
   assert.equal(s.fake.sent.length, 1)
   one.chats.g1 = { kind: 'group', title: 'G', target: { roomId: 'r1' }, at: 1 }
@@ -605,6 +615,7 @@ test('a permanent send error shows in the status and is not retried; a network e
   s.imTurn('a')
   s.fake.fails.push(Object.assign(new Error('forbidden'), { status: 403, permanent: true }))
   s.emitEvent('a', 'assistant/message', { message: { content: [{ type: 'text', text: 'will fail' }] } })
+  s.emitEvent('a', 'turn/end', { reason: { kind: 'completed' } })
   await s.flush()
   assert.equal(s.rt.imStatusView()[conn.id].state, 'error')
   assert.match(s.rt.imStatusView()[conn.id].error, /forbidden/)
@@ -614,6 +625,7 @@ test('a permanent send error shows in the status and is not retried; a network e
   s.fake.fails.push(Object.assign(new Error('network down'), {}))
   s.emitEvent('a', 'assistant/message', { message: { content: [{ type: 'text', text: 'first' }] } })
   s.emitEvent('a', 'assistant/message', { message: { content: [{ type: 'text', text: 'second' }] } })
+  s.emitEvent('a', 'turn/end', { reason: { kind: 'completed' } })
   await s.flush()
   await delay(20)
   await s.rt.imEndpoint('im-retry', { id: conn.id })
@@ -693,6 +705,7 @@ test('reply origin: an IM turn answers its own chat, and only that chat', async 
   s.imTurn('a')
   s.fake.sent.length = 0
   s.emitEvent('a', 'assistant/message', { message: { content: [{ type: 'text', text: 'only for u1' }] } })
+  s.imEnd('a')
   await s.flush()
   assert.deepEqual(s.fake.sent.map(entry => entry.chat.key), ['dm-u1'])
 })
@@ -729,6 +742,61 @@ test('reply origin: another source in the same turn withdraws the IM origin', as
   s.emitEvent('a', 'assistant/message', { message: { content: [{ type: 'text', text: 'reply' }] } })
   await s.flush()
   assert.equal(s.fake.sent.length, 0, 'a mixed turn sends nothing')
+})
+
+test('reply origin: a later IM message of the turn reclaims what a Web message withdrew', async (t) => {
+  const s = await start()
+  t.after(s.stop)
+  await pairedConn(s)
+  await dm(s, 'u1', 'first')
+  s.imTurn('a')
+  // A Web message joins the turn: it is not the chat's to answer, so the origin drops.
+  s.emitEvent('a', 'user/message', { source: { kind: 'web' }, content: [{ type: 'text', text: 'typed in the browser' }] })
+  s.fake.sent.length = 0
+  s.emitEvent('a', 'assistant/message', { message: { content: [{ type: 'text', text: 'no origin' }] } })
+  await s.flush()
+  assert.equal(s.fake.sent.length, 0)
+  // The chat writes again in the same turn: its message is the source that counts,
+  // so the turn's answer goes back to it instead of staying silent forever.
+  await dm(s, 'u1', 'again')
+  s.emitEvent('a', 'user/message', { source: { kind: 'user', rpcId: s.prompts.at(-1).requestId } })
+  s.emitEvent('a', 'assistant/message', { message: { content: [{ type: 'text', text: 'answer' }] } })
+  s.imEnd('a')
+  await s.flush()
+  assert.deepEqual(s.fake.sent.map(entry => [entry.chat.key, entry.text]), [['dm-u1', 'answer']])
+})
+
+test('a message with an id gets a receipt reaction where the platform can react', async (t) => {
+  const s = await start()
+  t.after(s.stop)
+  const { one } = await pairedConn(s)
+  await dm(s, 'u1', 'hi', { messageId: 'om_9' })
+  await s.flush()
+  assert.deepEqual(s.fake.reacted.map(entry => [entry.chat.key, entry.messageId]), [['dm-u1', 'om_9']])
+  // The reaction never stands in the message's way: the Bot still got the prompt.
+  assert.ok(one.chats['dm-u1'] !== undefined)
+})
+
+test('a chat can turn the final-result push of its binding off and on again', async (t) => {
+  const s = await start()
+  t.after(s.stop)
+  const { conn, one } = await pairedConn(s)
+  await dm(s, 'u1', 'hi')
+  await s.rt.imEndpoint('im-chat', { id: conn.id, chatKey: 'dm-u1', pushFinal: false })
+  assert.equal(one.chats['dm-u1'].pushFinal, false, 'the opt-out is stored on the binding')
+  s.imTurn('a')
+  s.emitEvent('a', 'assistant/message', { message: { content: [{ type: 'text', text: 'quiet' }] } })
+  s.imEnd('a')
+  await s.flush()
+  assert.equal(s.fake.sent.length, 0, 'a binding that opted out gets no final result')
+  await s.rt.imEndpoint('im-chat', { id: conn.id, chatKey: 'dm-u1', pushFinal: true })
+  assert.equal(one.chats['dm-u1'].pushFinal, undefined, 'opting back in clears the flag to the default')
+  await dm(s, 'u1', 'more')
+  s.imTurn('a')
+  s.emitEvent('a', 'assistant/message', { message: { content: [{ type: 'text', text: 'answer' }] } })
+  s.imEnd('a')
+  await s.flush()
+  assert.deepEqual(s.fake.sent.map(entry => entry.text), ['answer'])
 })
 
 test('reply origin: the turn ending stops later output from going out', async (t) => {
@@ -808,6 +876,7 @@ test('reply origin: a turn that runs past any window still answers its chat', as
   const later = Date.now() + 3 * 60 * 60 * 1000
   t.mock.timers.enable({ apis: ['Date'], now: later })
   s.emitEvent('a', 'assistant/message', { message: { content: [{ type: 'text', text: 'long answer' }] } })
+  s.imEnd('a')
   await s.flush()
   assert.deepEqual(s.fake.sent.map(entry => entry.text), ['long answer'])
 })
@@ -823,6 +892,7 @@ test('reply origin: a message that waited in the queue past any window still nam
   t.mock.timers.enable({ apis: ['Date'], now: later })
   s.emitEvent('a', 'user/message', { source: { kind: 'user', rpcId: requestId }, content: [{ type: 'text', text: 'from the chat' }] })
   s.emitEvent('a', 'assistant/message', { message: { content: [{ type: 'text', text: 'answers the queue' }] } })
+  s.imEnd('a')
   await s.flush()
   assert.deepEqual(s.fake.sent.map(entry => entry.text), ['answers the queue'])
 })
@@ -898,6 +968,7 @@ test('reply origin: an answer from IM keeps its chat for the turn the answer con
   s.emitEvent('a', 'turn/start', { turn: 2 })
   s.emitEvent('a', 'user/message', s.agentOf('a').lastFollowup)
   s.emitEvent('a', 'assistant/message', { message: { content: [{ type: 'text', text: 'after the answer' }] } })
+  s.imEnd('a')
   await s.flush()
   assert.deepEqual(s.fake.sent.map(entry => [entry.chat.key, entry.text]), [['dm-u1', 'after the answer']])
 })
@@ -1030,6 +1101,7 @@ test('mixed IM chats cannot reclaim the same turn, and the next turn starts clea
   await dm(s, 'u1', 'fresh')
   s.imTurn('a')
   s.emitEvent('a', 'assistant/message', { message: { content: [{ type: 'text', text: 'clean' }] } })
+  s.imEnd('a')
   await s.flush()
   assert.deepEqual(s.fake.sent.map(x => [x.chat.key, x.text]), [['dm-u1', 'clean']])
 })
@@ -1063,12 +1135,16 @@ test('a send that keeps answering 5xx keeps an exhausted send for manual retry w
   const fail = () => Object.assign(new Error('Feishu answered 502'), { status: 502, retryAfter: 0.005 })
   s.fake.fails.push(fail(), fail(), fail(), fail())
   s.emitEvent('a', 'assistant/message', { message: { content: [{ type: 'text', text: 'first' }] } })
+  s.imEnd('a')
   await delay(120)
   assert.equal(s.fake.sent.filter(job => job.text === 'first').length, 4, 'the first message pauses after four attempts')
   const status = s.rt.imStatusView()[conn.id]
   assert.equal(status.state, 'error')
   assert.match(status.error, /Send failed after 4 attempts: Feishu answered 502/)
+  await dm(s, 'u1', 'more')
+  s.imTurn('a')
   s.emitEvent('a', 'assistant/message', { message: { content: [{ type: 'text', text: 'second' }] } })
+  s.imEnd('a')
   await delay(40)
   assert.equal(s.fake.sent.filter(job => job.text === 'second').length, 1, 'the next message is not held behind the failed one')
   assert.equal(s.rt.imStatusView()[conn.id].state, 'error', 'a later success cannot hide an undelivered message')
@@ -1090,6 +1166,7 @@ test('a retrying send shows a retrying status before the budget runs out', async
   s.fake.sent.length = 0
   s.fake.fails.push(Object.assign(new Error('Feishu answered 502'), { status: 502, retryAfter: 0.2 }))
   s.emitEvent('a', 'assistant/message', { message: { content: [{ type: 'text', text: 'slow' }] } })
+  s.imEnd('a')
   await delay(60)
   const status = s.rt.imStatusView()[conn.id]
   assert.equal(status.state, 'retrying')
@@ -1115,6 +1192,7 @@ test('send recovery restores the adapter state, isolates chats, and keeps adapte
   s.fake.handlers.onStatus({ state: 'reconnecting' })
   s.fake.fails.push(Object.assign(new Error('502'), { status: 502, retryAfter: 0.005 }))
   s.emitEvent('a', 'assistant/message', { message: { content: [{ type: 'text', text: 'during-reconnect' }] } })
+  s.imEnd('a')
   await delay(60)
   assert.equal(s.rt.imStatusView()[conn.id].state, 'reconnecting')
 
@@ -1123,17 +1201,26 @@ test('send recovery restores the adapter state, isolates chats, and keeps adapte
   s.rt.state.im.connections[conn.id].chats['dm-u2'].target = { botId: 'b' }
   await s.rt.save()
   s.fake.fails.push(Object.assign(new Error('chat-a-down'), { status: 403, permanent: true }))
+  await dm(s, 'u1', 'again')
+  s.imTurn('a')
   s.emitEvent('a', 'assistant/message', { message: { content: [{ type: 'text', text: 'fails-u1' }] } })
+  s.imEnd('a')
   await delay(40)
   assert.equal(s.rt.imStatusView()[conn.id].state, 'error')
+  await dm(s, 'u2', 'to b')
+  s.imTurn('b')
   s.emitEvent('b', 'assistant/message', { message: { content: [{ type: 'text', text: 'ok-u2' }] } })
+  s.imEnd('b')
   await delay(40)
   assert.equal(s.rt.imStatusView()[conn.id].state, 'error')
   assert.match(s.rt.imStatusView()[conn.id].error, /chat-a-down/)
 
   s.fake.handlers.onStatus({ state: 'error', error: 'handshake refused' })
   s.fake.fails.push(Object.assign(new Error('502'), { status: 502, retryAfter: 0.2 }))
+  await dm(s, 'u1', 'once more')
+  s.imTurn('a')
   s.emitEvent('a', 'assistant/message', { message: { content: [{ type: 'text', text: 'retry-under-err' }] } })
+  s.imEnd('a')
   await delay(40)
   assert.equal(s.rt.imStatusView()[conn.id].state, 'error')
   assert.equal(s.rt.imStatusView()[conn.id].error, 'handshake refused')
@@ -1647,6 +1734,7 @@ test('im-retry while reconnecting preserves retrying sends and reserved cards in
   )
   await delay(20)
   s.emitEvent('a', 'assistant/message', { message: { content: [{ type: 'text', text: 'after-card' }] } })
+  s.imEnd('a')
   s.fake.handlers.onStatus({ state: 'reconnecting' })
   await delay(20)
 
@@ -1751,6 +1839,7 @@ test('stopping a runner mid-send retains the interrupted send and does not resur
 
   fake.holdNextSend()
   s.emitEvent('a', 'assistant/message', { message: { content: [{ type: 'text', text: 'in-flight' }] } })
+  s.imEnd('a')
   await delay(20)
   await s.rt.imEndpoint('im-update', { id: conn.id, enabled: false })
   releaseSend()
@@ -1800,7 +1889,11 @@ test('im-retry keeps an interrupted in-flight send ahead of queued followers whe
 
   fake.holdNextSend()
   s.emitEvent('a', 'assistant/message', { message: { content: [{ type: 'text', text: 'first-A' }] } })
+  s.imEnd('a')
+  await dm(s, 'u1', 'next')
+  s.imTurn('a')
   s.emitEvent('a', 'assistant/message', { message: { content: [{ type: 'text', text: 'second-B' }] } })
+  s.imEnd('a')
   await delay(20)
   s.fake.handlers.onStatus({ state: 'reconnecting' })
   await s.rt.imEndpoint('im-retry', { id: conn.id })
@@ -1847,6 +1940,7 @@ test('im-retry clears retrying status when an interrupted single send drops afte
 
   fake.holdNextSend()
   s.emitEvent('a', 'assistant/message', { message: { content: [{ type: 'text', text: 'cancelled-on-stop' }] } })
+  s.imEnd('a')
   await delay(20)
   s.fake.handlers.onStatus({ state: 'reconnecting' })
   await s.rt.imEndpoint('im-retry', { id: conn.id })

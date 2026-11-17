@@ -60,8 +60,9 @@ function isHttpsPage(page) {
 // not start, so `check()` is a no-op in those phases.
 const UPDATE_BUSY = new Set(['checking', 'downloading', 'downloaded'])
 
-function stateHolder(log) {
-  let state = { phase: 'checking' }
+function stateHolder(log, auto = true) {
+  // `off` is the auto-update switch turned down: no check runs until it comes back.
+  let state = { phase: auto ? 'checking' : 'off' }
   const listeners = new Set()
   return {
     state: () => state,
@@ -80,11 +81,11 @@ function stateHolder(log) {
 
 // `asset` names the release asset of this install (default: the macOS zip); a release without
 // it does not count.
-export function watchReleases({ current, arch, fetch = globalThis.fetch, ask, open, feed = RELEASES_URL, log = console, asset }) {
+export function watchReleases({ current, arch, fetch = globalThis.fetch, ask, open, feed = RELEASES_URL, log = console, asset, auto = true }) {
   const assetName = asset ?? (version => `DS-Bot-${version}-mac-${arch}.zip`)
   let asked
   let latest = Promise.resolve(null)
-  const holder = stateHolder(log)
+  const holder = stateHolder(log, auto)
   const run = () => {
     holder.set({ phase: 'checking' })
     latest = (async () => {
@@ -139,11 +140,23 @@ export function watchReleases({ current, arch, fetch = globalThis.fetch, ask, op
     })()
   }
   // A check runs at once and then on the timer; a manual one only starts when none is on.
+  // With the auto switch down nothing runs on its own: the state sits on `off` and only
+  // `check()` — the About row's button — looks for a release.
   const check = () => { if (!UPDATE_BUSY.has(holder.state().phase)) run() }
-  run()
-  const timer = setInterval(check, CHECK_EVERY_MS)
-  timer.unref?.()
-  return { stop: () => { clearInterval(timer) }, latest: () => latest, state: holder.state, subscribe: holder.subscribe, check }
+  if (auto) run()
+  let timer = null
+  const arm = () => { if (timer === null) { timer = setInterval(check, CHECK_EVERY_MS); timer.unref?.() } }
+  const disarm = () => { if (timer !== null) { clearInterval(timer); timer = null } }
+  if (auto) arm()
+  return {
+    stop: disarm,
+    latest: () => latest,
+    state: holder.state,
+    subscribe: holder.subscribe,
+    check,
+    enable: () => { arm(); check() },
+    disable: () => { disarm(); holder.set({ phase: 'off' }) },
+  }
 }
 
 /**
@@ -169,11 +182,11 @@ export function watchReleases({ current, arch, fetch = globalThis.fetch, ask, op
  *   `check` runs the same check the timer does and does nothing while a check, a download or a
  *   ready install is on.
  */
-export function watchUpdates({ updater, beforeInstall, ask, feed, log = console }) {
+export function watchUpdates({ updater, beforeInstall, ask, feed, log = console, auto = true }) {
   updater.autoDownload = true
   updater.autoInstallOnAppQuit = true
   if (feed) updater.setFeedURL({ provider: 'generic', url: feed })
-  const holder = stateHolder(log)
+  const holder = stateHolder(log, auto)
   const install = async () => {
     await beforeInstall()
     updater.quitAndInstall(true, true)
@@ -218,8 +231,22 @@ export function watchUpdates({ updater, beforeInstall, ask, feed, log = console 
     }, () => { settled({ phase: 'failed' }); return null })
   }
   const check = () => { if (!UPDATE_BUSY.has(holder.state().phase)) run() }
-  run()
-  const timer = setInterval(check, CHECK_EVERY_MS)
-  timer.unref?.()
-  return { stop: () => { clearInterval(timer) }, latest: () => latest, install, state: holder.state, subscribe: holder.subscribe, check }
+  // Same rule as watchReleases: with the auto switch down nothing checks on its own, and
+  // a download that already finished stays offered — turning the switch down does not
+  // throw away what the disk already has.
+  if (auto) run()
+  let timer = null
+  const arm = () => { if (timer === null) { timer = setInterval(check, CHECK_EVERY_MS); timer.unref?.() } }
+  const disarm = () => { if (timer !== null) { clearInterval(timer); timer = null } }
+  if (auto) arm()
+  return {
+    stop: disarm,
+    latest: () => latest,
+    install,
+    state: holder.state,
+    subscribe: holder.subscribe,
+    check,
+    enable: () => { arm(); check() },
+    disable: () => { disarm(); if (holder.state().phase !== 'downloaded') holder.set({ phase: 'off' }) },
+  }
 }

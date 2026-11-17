@@ -586,3 +586,44 @@ describe('watchUpdates', () => {
     assert.deepEqual(seen, ['checking', 'downloading'])
   })
 })
+
+describe('the automatic-update switch', () => {
+  test('watchReleases with auto off checks nothing until it comes back', async (t) => {
+    const calls = []
+    const asked = []
+    const updates = watchReleases({
+      current: '0.1.7', arch: 'arm64', auto: false, log: quietLog(),
+      fetch: async () => { calls.push(1); return releaseResponse([release('0.1.9')]) },
+      ask: async version => { asked.push(version); return false },
+      open: () => {},
+    })
+    t.after(updates.stop)
+    assert.equal(updates.state().phase, 'off')
+    assert.deepEqual(calls, [], 'nothing is fetched on its own')
+    assert.deepEqual(asked, [], 'nobody is asked')
+    updates.check()
+    assert.equal(calls.length, 1, 'the manual check still works')
+    assert.deepEqual(await updates.latest(), { version: '0.1.9', page: 'https://github.com/Fei2411/DS-Bot/releases/tag/v0.1.9' })
+    updates.disable()
+    assert.equal(updates.state().phase, 'off')
+    assert.equal(calls.length, 1)
+    updates.enable()
+    assert.equal(calls.length, 2, 'turning the switch back on checks at once')
+  })
+
+  test('watchUpdates with auto off does not check and keeps a finished download offered', async (t) => {
+    const updater = new FakeUpdater()
+    const updates = watchUpdates({ updater, beforeInstall: async () => {}, auto: false, log: quietLog() })
+    t.after(updates.stop)
+    assert.equal(updates.state().phase, 'off')
+    assert.equal(updater.checks, 0)
+    updater.found = finds('0.1.9', () => Promise.resolve())
+    updates.check()
+    await updates.latest()
+    updater.emit('update-downloaded', { version: '0.1.9' })
+    assert.equal(updates.state().phase, 'downloaded')
+    updates.disable()
+    assert.equal(updates.state().phase, 'downloaded', 'a download that finished stays offered')
+    assert.equal(updater.checks, 1, 'disabling again starts no check')
+  })
+})

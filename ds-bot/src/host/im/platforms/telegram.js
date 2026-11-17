@@ -272,6 +272,10 @@ export default {
         }
       },
       typing: chat => call('sendChatAction', { chat_id: chat.key, action: 'typing' }).catch(() => {}),
+      // A receipt reaction. Telegram's reaction set has no ✅, so 👍 is the mark.
+      react: async (chat, messageId) => {
+        await call('setMessageReaction', { chat_id: chat.key, message_id: messageId, emoji: '👍' })
+      },
       stop: () => {
         stopped = true
         for (const abort of inFlight) abort.abort(stoppedError())

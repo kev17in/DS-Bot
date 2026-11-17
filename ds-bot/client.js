@@ -242,6 +242,13 @@ var JA = {
   "Group": "グループ",
   "Direct message": "ダイレクトメッセージ",
   "Enabled": "有効",
+  "Push the final result": "最終結果をプッシュ",
+  "Send each turn’s final answer to this chat": "毎回の最終回答をこのチャットに送る",
+  "Choose the Bot or group chat this chat talks to": "このチャットが対話するボットまたはグループを選ぶ",
+  "Remove this chat binding": "このチャットの連結を削除する",
+  "Update automatically": "自動で更新する",
+  "Automatic updates are off.": "自動更新はオフです。",
+  "Check for updates and install them in the background": "背景で更新を確認しインストールする",
   "Send the IM bot a message to connect your account": "IM ボットにメッセージを送るとアカウントが連携されます",
   "Remove IM bot": "IM ボットを削除",
   "Remove this IM bot? Its accounts and chats are removed too.": "この IM ボットを削除しますか？関連するアカウントとチャットも削除されます。",
@@ -2662,6 +2669,13 @@ var KO = {
   Group: "그룹",
   "Direct message": "개인 메시지",
   Enabled: "사용",
+  "Push the final result": "최종 결과 푸시",
+  "Send each turn’s final answer to this chat": "매 라운드의 최종 답벴을 이 채팅으로 보내기",
+  "Choose the Bot or group chat this chat talks to": "이 채팅이 대화할 봇 또는 그룹 채팅 선택",
+  "Remove this chat binding": "이 채팅 바인딩 제거",
+  "Update automatically": "자동으로 업데이트",
+  "Automatic updates are off.": "자동 업데이트가 끄져 있습니다.",
+  "Check for updates and install them in the background": "백그라운드에서 업데이트를 확인하고 설치합니다",
   "Send the IM bot a message to connect your account": "IM 봇에게 메시지를 보내 계정을 연결하세요",
   "Remove IM bot": "IM 봇 제거",
   "Remove this IM bot? Its accounts and chats are removed too.": "이 IM 봇을 제거하시겠습니까? 연결된 계정과 대화도 함께 제거됩니다.",
@@ -5125,6 +5139,13 @@ var ES = {
   Group: "Grupo",
   "Direct message": "Mensaje directo",
   Enabled: "Activado",
+  "Push the final result": "Enviar el resultado final",
+  "Send each turn’s final answer to this chat": "Enviar la respuesta final de cada turno a este chat",
+  "Choose the Bot or group chat this chat talks to": "Elige el bot o grupo al que habla este chat",
+  "Remove this chat binding": "Quitar esta vinculación de chat",
+  "Update automatically": "Actualizar automáticamente",
+  "Automatic updates are off.": "Las actualizaciones automáticas están desactivadas.",
+  "Check for updates and install them in the background": "Buscar actualizaciones e instalarlas en segundo plano",
   "Send the IM bot a message to connect your account": "Envía un mensaje al bot de IM para conectar tu cuenta",
   "Remove IM bot": "Quitar bot de IM",
   "Remove this IM bot? Its accounts and chats are removed too.": "¿Quitar este bot de IM? Sus cuentas y chats también se eliminarán.",
@@ -7586,6 +7607,13 @@ var FR = {
   "Group": "Groupe",
   "Direct message": "Message direct",
   "Enabled": "Activé",
+  "Push the final result": "Envoyer le résultat final",
+  "Send each turn’s final answer to this chat": "Envoyer la réponse finale de chaque tour à ce chat",
+  "Choose the Bot or group chat this chat talks to": "Choisir le bot ou le groupe auquel ce chat s’adresse",
+  "Remove this chat binding": "Retirer cette liaison de chat",
+  "Update automatically": "Mettre à jour automatiquement",
+  "Automatic updates are off.": "Les mises à jour automatiques sont désactivées.",
+  "Check for updates and install them in the background": "Vérifier les mises à jour et les installer en arrière-plan",
   "Send the IM bot a message to connect your account": "Envoyez un message au bot IM pour connecter votre compte",
   "Remove IM bot": "Supprimer le bot IM",
   "Remove this IM bot? Its accounts and chats are removed too.": "Supprimer ce bot IM ? Ses comptes et ses discussions seront également supprimés.",
@@ -10006,6 +10034,13 @@ var DE = {
   Group: "Gruppe",
   "Direct message": "Direktnachricht",
   Enabled: "Aktiviert",
+  "Push the final result": "Endergebnis senden",
+  "Send each turn’s final answer to this chat": "Die finale Antwort jeder Runde an diesen Chat senden",
+  "Choose the Bot or group chat this chat talks to": "Wähle den Bot oder Gruppenchat, mit dem dieser Chat spricht",
+  "Remove this chat binding": "Diese Chat-Bindung entfernen",
+  "Update automatically": "Automatisch aktualisieren",
+  "Automatic updates are off.": "Automatische Updates sind aus.",
+  "Check for updates and install them in the background": "Im Hintergrund nach Updates suchen und sie installieren",
   "Send the IM bot a message to connect your account": "Sende dem IM-Bot eine Nachricht, um dein Konto zu verbinden",
   "Remove IM bot": "IM-Bot entfernen",
   "Remove this IM bot? Its accounts and chats are removed too.": "Diesen IM-Bot entfernen? Seine Konten und Chats werden ebenfalls entfernt.",
@@ -12443,6 +12478,13 @@ var ZH = {
   Group: "群",
   "Direct message": "私聊",
   Enabled: "启用",
+  "Push the final result": "推送最终结果",
+  "Send each turn’s final answer to this chat": "把每轮对话的最终回答发送到这个聊天",
+  "Choose the Bot or group chat this chat talks to": "选择这个聊天对接的 Bot 或群聊",
+  "Remove this chat binding": "移除这个聊天绑定",
+  "Update automatically": "自动更新",
+  "Automatic updates are off.": "自动更新已关闭。",
+  "Check for updates and install them in the background": "在后台检查并安装更新",
   "Send the IM bot a message to connect your account": "给 IM 机器人发一条消息，即可连接你的账号",
   "Remove IM bot": "移除 IM 机器人",
   "Remove this IM bot? Its accounts and chats are removed too.": "确认移除这个 IM 机器人？它的账号和聊天也会一起移除。",
@@ -27735,6 +27777,7 @@ var IM_PLATFORMS = [
     fields: [{ key: "token", label: "Bot token", secret: true }],
     buttons: true,
     groups: true,
+    reactions: true,
     help: "https://t.me/BotFather"
   },
   {
@@ -27754,7 +27797,8 @@ var IM_PLATFORMS = [
       { key: "appSecret", label: "App Secret", secret: true }
     ],
     buttons: true,
-    groups: true
+    groups: true,
+    reactions: true
   },
   {
     id: "dingtalk",
@@ -35105,8 +35149,21 @@ function DetailView({ conn, status, roster, actions, onBack }) {
           (0, import_react44.createElement)(
             "span",
             { className: "bt-set-control" },
-            chat.kind === "group" ? (0, import_react44.createElement)(TargetMenu, { value: chat.target ?? null, roster, rooms: true, label: t("Bound to"), disabled: busy, onPick: (target) => run2(actions.imChat(conn.id, { chatKey: key, target })) }) : null,
-            (0, import_react44.createElement)("button", { type: "button", className: "bt-mini bt-im-danger", "data-confirm": confirm === `c:${key}` || void 0, disabled: busy, onClick: () => ask(`c:${key}`, () => actions.imChat(conn.id, { chatKey: key, remove: true })) }, confirm === `c:${key}` ? t("Remove?") : t("Remove"))
+            // Each control says what it does: a small label above it, and a title
+            // with the longer story for whoever hovers.
+            (0, import_react44.createElement)(
+              "span",
+              { className: "bt-im-opt" },
+              (0, import_react44.createElement)("span", { className: "bt-im-opt-label", title: t("Send each turn’s final answer to this chat") }, t("Push the final result")),
+              (0, import_react44.createElement)(Switch, { on: chat.pushFinal !== false, label: t("Push the final result"), disabled: busy, onChange: (on) => run2(actions.imChat(conn.id, { chatKey: key, pushFinal: on })) })
+            ),
+            chat.kind === "group" ? (0, import_react44.createElement)(
+              "span",
+              { className: "bt-im-opt" },
+              (0, import_react44.createElement)("span", { className: "bt-im-opt-label", title: t("Choose the Bot or group chat this chat talks to") }, t("Bound to")),
+              (0, import_react44.createElement)(TargetMenu, { value: chat.target ?? null, roster, rooms: true, label: t("Bound to"), disabled: busy, onPick: (target) => run2(actions.imChat(conn.id, { chatKey: key, target })) })
+            ) : null,
+            (0, import_react44.createElement)("button", { type: "button", className: "bt-mini bt-im-danger", title: t("Remove this chat binding"), "data-confirm": confirm === `c:${key}` || void 0, disabled: busy, onClick: () => ask(`c:${key}`, () => actions.imChat(conn.id, { chatKey: key, remove: true })) }, confirm === `c:${key}` ? t("Remove?") : t("Remove"))
           )
         ))
       )
@@ -35264,6 +35321,8 @@ var IM_CSS = `
 .bt-im-qr-box[data-state=error] .bt-im-qr-caption{color:var(--bt-danger);max-width:320px}
 .bt-im-chat-name{flex-direction:row;align-items:center;gap:8px}
 .bt-im-chat .bt-set-control{gap:8px}
+.bt-im-opt{display:flex;flex-direction:column;align-items:flex-end;gap:4px}
+.bt-im-opt-label{font-size:11px;line-height:14px;color:var(--bt-ink-2);cursor:help}
 .bt-im-danger:hover{color:var(--bt-danger)}
 .bt-im-danger[data-confirm]{color:var(--bt-danger);background:var(--bt-danger-soft)}
 .bt-im-remove{justify-content:center;color:var(--bt-danger)}
@@ -35665,6 +35724,8 @@ function ownAppRow(ownApp) {
       return { hint: t("{version} is available", { version }), button: "open" };
     case "failed":
       return { hint: t("Could not check for updates."), button: "check" };
+    case "off":
+      return { hint: t("Automatic updates are off."), button: "check" };
     default:
       return null;
   }
@@ -35727,6 +35788,25 @@ function AboutPage({ useUpdate, actions, run: run2, Section: Section2, Row: Row4
     dshPhase === "installing" ? t("Updating…") : dshPhase === "failed" ? t("Try again") : t("Update")
   ) : null;
   const repo = update.repoUrl;
+  const [auto, setAuto] = (0, import_react47.useState)(null);
+  (0, import_react47.useEffect)(() => {
+    let live = true;
+    void actions.ownAppAuto?.().then((value) => {
+      if (live && typeof value === "boolean") setAuto(value);
+    }, () => {
+    });
+    return () => {
+      live = false;
+    };
+  }, []);
+  const autoRow = update.source === "app" && auto !== null ? (0, import_react47.createElement)(
+    Row4,
+    { label: t("Update automatically"), hint: t("Check for updates and install them in the background") },
+    (0, import_react47.createElement)(Switch, { on: auto, label: t("Update automatically"), onChange: (next) => {
+      setAuto(next);
+      void actions.setOwnAppAuto?.(next);
+    } })
+  ) : null;
   return [
     (0, import_react47.createElement)(
       "div",
@@ -35756,6 +35836,7 @@ function AboutPage({ useUpdate, actions, run: run2, Section: Section2, Row: Row4
     (0, import_react47.createElement)(
       Section2,
       { key: "updates", title: t("Updates") },
+      autoRow,
       (0, import_react47.createElement)(Row4, { label: "DS Bot", hint: ownRow?.hint ?? botHint(update) }, botControl, update.available && update.notesUrl ? (0, import_react47.createElement)("a", linkProps(update.notesUrl), t("What's new")) : null),
       dsh?.current ? (0, import_react47.createElement)(Row4, { label: "DeepSeek Harness", hint: dshHint(dsh, dshShown) }, dshControl) : null
     ),
@@ -46208,6 +46289,10 @@ function apply(ctx) {
   };
   actions.openOwnApp = async () => {
     await ownAppUpdates?.open?.();
+  };
+  actions.ownAppAuto = async () => await ownAppUpdates?.auto?.() ?? null;
+  actions.setOwnAppAuto = async (on) => {
+    await ownAppUpdates?.setAuto?.(on === true);
   };
   const browserPages = browsers?.pages ?? createSource({});
   const browserTabs = browsers?.tabs ?? createSource({});
