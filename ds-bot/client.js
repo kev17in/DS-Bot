@@ -45579,6 +45579,8 @@ function apply(ctx) {
   const work = createSource({ bots: {}, approvals: [] });
   let workKey = "";
   let liveKey;
+  const LIVE_FIELDS = ["partsRunning", "secretStore", "secrets", "connectors", "capabilityStatuses", "phone", "learning", "learningSettled", "btwCards", "sideChats", "imStatus", "imVia"];
+  const seenLive = /* @__PURE__ */ Object.create(null);
   const live = createSource({});
   const computer = createSource({});
   let computerKey = "{}";
@@ -45637,18 +45639,15 @@ function apply(ctx) {
     if (value.memoryNews !== void 0) noteMemoryNews(value.memoryNews);
     const current2 = roster.getSnapshot();
     const live2 = {};
-    if (value.partsRunning !== void 0 && JSON.stringify(value.partsRunning) !== JSON.stringify(current2.partsRunning ?? {})) live2.partsRunning = value.partsRunning;
-    if (value.secretStore !== void 0 && JSON.stringify(value.secretStore) !== JSON.stringify(current2.secretStore ?? {})) live2.secretStore = value.secretStore;
-    if (value.secrets !== void 0 && JSON.stringify(value.secrets) !== JSON.stringify(current2.secrets ?? [])) live2.secrets = value.secrets;
-    if (value.connectors !== void 0 && JSON.stringify(value.connectors) !== JSON.stringify(current2.connectors ?? [])) live2.connectors = value.connectors;
-    if (value.capabilityStatuses !== void 0 && JSON.stringify(value.capabilityStatuses) !== JSON.stringify(current2.capabilityStatuses ?? {})) live2.capabilityStatuses = value.capabilityStatuses;
-    if (value.phone !== void 0 && JSON.stringify(value.phone) !== JSON.stringify(current2.phone ?? null)) live2.phone = value.phone;
-    if (value.learning !== void 0 && JSON.stringify(value.learning) !== JSON.stringify(current2.learning ?? {})) live2.learning = value.learning;
-    if (value.learningSettled !== void 0 && JSON.stringify(value.learningSettled) !== JSON.stringify(current2.learningSettled ?? {})) live2.learningSettled = value.learningSettled;
-    if (value.btwCards !== void 0 && JSON.stringify(value.btwCards) !== JSON.stringify(current2.btwCards ?? {})) live2.btwCards = value.btwCards;
-    if (value.sideChats !== void 0 && JSON.stringify(value.sideChats) !== JSON.stringify(current2.sideChats ?? {})) live2.sideChats = value.sideChats;
-    if (value.imStatus !== void 0 && JSON.stringify(value.imStatus) !== JSON.stringify(current2.imStatus ?? {})) live2.imStatus = value.imStatus;
-    if (value.imVia !== void 0 && JSON.stringify(value.imVia) !== JSON.stringify(current2.imVia ?? {})) live2.imVia = value.imVia;
+    const applyLive = (name, next) => {
+      const key = JSON.stringify(next);
+      if (key === seenLive[name]) return;
+      seenLive[name] = key;
+      live2[name] = next;
+    };
+    for (const name of LIVE_FIELDS) {
+      if (value[name] !== void 0) applyLive(name, value[name]);
+    }
     if (value.readOnly !== void 0 && (value.readOnly ?? null) !== (current2.readOnly ?? null)) live2.readOnly = value.readOnly;
     if (Object.keys(live2).length > 0 && current2.ready) roster.set({ ...current2, ...live2 });
     if (value.unchanged || value.revision === current2.revision && value.modelsKey === current2.modelsKey) {
@@ -45656,6 +45655,10 @@ function apply(ctx) {
     }
     if (Object.keys(seenAt).length === 0) leaveVisits([...value.bots, ...value.rooms].map((entry) => entry.id));
     roster.set(indexRoster(value));
+    for (const name of LIVE_FIELDS) {
+      if (value[name] !== void 0) seenLive[name] = JSON.stringify(value[name]);
+      else delete seenLive[name];
+    }
     try {
       const ids = (value.agents ?? []).flatMap((agent) => agent.sessions ?? []);
       localStorage.setItem(STORAGE.agentSessions, JSON.stringify(ids));

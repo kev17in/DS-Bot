@@ -51,6 +51,27 @@ export function turnFailure(error) {
 
 export const failureLine = failure => `${failure.code}${failure.status ? ` ${failure.status}` : ''}${failure.message ? `: ${failure.message.slice(0, 200)}` : ''}`
 
+// Tool-call args, parsed for the views on every poll while a turn runs. The same
+// string always parses to the same value, so the parse is cached by the string.
+const PARSED_ARGS_MAX = 200
+const PARSED_ARGS_MAX_LENGTH = 64 * 1024
+const parsedArgs = new Map()
+const parseArgs = (text) => {
+  if (typeof text !== 'string' || text === '') return {}
+  // A very large argument (a file write) is parsed where it stands: caching it
+  // would pin its text and its parse tree in memory long after the call ended.
+  if (text.length > PARSED_ARGS_MAX_LENGTH) {
+    try { return JSON.parse(text) } catch { return {} }
+  }
+  let value = parsedArgs.get(text)
+  if (value === undefined) {
+    if (parsedArgs.size >= PARSED_ARGS_MAX) parsedArgs.clear()
+    try { value = JSON.parse(text) } catch { value = {} }
+    parsedArgs.set(text, value)
+  }
+  return value
+}
+
 // The reply a sender waits for, sent the way a finished turn sends it: the work it was
 // for closes, and the answer goes up to the Bot that asked. `id` is the Session the
 // answer comes from; `source` is the trigger the turn answered.
@@ -254,7 +275,7 @@ export function install(rt) {
     const call = [...(entry?.calls?.values() ?? [])].findLast(item => item.name === 'subagent')
     if (call === undefined) return undefined
     try {
-      const args = JSON.parse(call.args || '{}')
+      const args = parseArgs(call.args)
       const raw = [args.description, args.label, args.prompt, args.task].find(value => typeof value === 'string' && value.trim() !== '')
       return raw?.replace(/\s+/g, ' ').trim().slice(0, 120)
     } catch {
@@ -583,8 +604,7 @@ export function install(rt) {
     const call = [...(entry.calls?.values() ?? [])].at(-1)
     if (call === undefined) return {}
     const said = entry.step?.replace(/\s+/g, ' ').trim().slice(0, 160)
-    let args
-    try { args = JSON.parse(call.args || '{}') } catch { args = {} }
+    const args = parseArgs(call.args)
     const first = keys => keys.map(key => args?.[key]).find(value => typeof value === 'string' && value.trim() !== '')?.replace(/\s+/g, ' ').trim()
     const note = first(['description', 'justification'])
     const path = first(['file_path', 'path'])
@@ -665,8 +685,7 @@ export function install(rt) {
   // What a running tool call is about, for an approval card: its own description and
   // the command, path or address it acts on.
   const callDetail = (sessionId, callId) => {
-    let args
-    try { args = JSON.parse(live.get(sessionId)?.calls?.get(callId)?.args ?? '{}') } catch { args = {} }
+    const args = parseArgs(live.get(sessionId)?.calls?.get(callId)?.args)
     const first = keys => keys.map(key => args?.[key]).find(value => typeof value === 'string' && value.trim() !== '')
     const text = first(['description', 'justification'])
     const code = first(['command', 'cmd', 'file_path', 'path', 'url', 'query'])

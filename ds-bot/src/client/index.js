@@ -156,6 +156,10 @@ export function apply(ctx) {
   // The version of the live fields this window last got; while it still names the
   // host's answer, the poll leaves those fields out.
   let liveKey
+  // The JSON of each live roster field as it was last applied (see pull): a cheap
+  // identity for "nothing changed" that needs no second stringify of the roster.
+  const LIVE_FIELDS = ['partsRunning', 'secretStore', 'secrets', 'connectors', 'capabilityStatuses', 'phone', 'learning', 'learningSettled', 'btwCards', 'sideChats', 'imStatus', 'imVia']
+  const seenLive = Object.create(null)
   // Per Session, what its transcript has in flight (running tools, a streaming reply).
   const live = createSource({})
   // Computer use: leases, per-Bot control, pending app cards and holds.
@@ -213,20 +217,20 @@ export function apply(ctx) {
     }
     if (value.memoryNews !== undefined) noteMemoryNews(value.memoryNews)
     const current = roster.getSnapshot()
-    // Connector, capability and phone states change without a new revision.
+    // Connector, capability and phone states change without a new revision. The JSON
+    // each field held when it was last applied is kept here, so an unchanged field
+    // costs one stringify of the answer's value, not one of the answer and one of
+    // the whole current roster field again; roster.set has no other writer.
     const live = {}
-    if (value.partsRunning !== undefined && JSON.stringify(value.partsRunning) !== JSON.stringify(current.partsRunning ?? {})) live.partsRunning = value.partsRunning
-    if (value.secretStore !== undefined && JSON.stringify(value.secretStore) !== JSON.stringify(current.secretStore ?? {})) live.secretStore = value.secretStore
-    if (value.secrets !== undefined && JSON.stringify(value.secrets) !== JSON.stringify(current.secrets ?? [])) live.secrets = value.secrets
-    if (value.connectors !== undefined && JSON.stringify(value.connectors) !== JSON.stringify(current.connectors ?? [])) live.connectors = value.connectors
-    if (value.capabilityStatuses !== undefined && JSON.stringify(value.capabilityStatuses) !== JSON.stringify(current.capabilityStatuses ?? {})) live.capabilityStatuses = value.capabilityStatuses
-    if (value.phone !== undefined && JSON.stringify(value.phone) !== JSON.stringify(current.phone ?? null)) live.phone = value.phone
-    if (value.learning !== undefined && JSON.stringify(value.learning) !== JSON.stringify(current.learning ?? {})) live.learning = value.learning
-    if (value.learningSettled !== undefined && JSON.stringify(value.learningSettled) !== JSON.stringify(current.learningSettled ?? {})) live.learningSettled = value.learningSettled
-    if (value.btwCards !== undefined && JSON.stringify(value.btwCards) !== JSON.stringify(current.btwCards ?? {})) live.btwCards = value.btwCards
-    if (value.sideChats !== undefined && JSON.stringify(value.sideChats) !== JSON.stringify(current.sideChats ?? {})) live.sideChats = value.sideChats
-    if (value.imStatus !== undefined && JSON.stringify(value.imStatus) !== JSON.stringify(current.imStatus ?? {})) live.imStatus = value.imStatus
-    if (value.imVia !== undefined && JSON.stringify(value.imVia) !== JSON.stringify(current.imVia ?? {})) live.imVia = value.imVia
+    const applyLive = (name, next) => {
+      const key = JSON.stringify(next)
+      if (key === seenLive[name]) return
+      seenLive[name] = key
+      live[name] = next
+    }
+    for (const name of LIVE_FIELDS) {
+      if (value[name] !== undefined) applyLive(name, value[name])
+    }
     // The read-only notice goes once this host takes the team over from a dsh that
     // closed, without a reload: the window holds the answer's live fields until then.
     if (value.readOnly !== undefined && (value.readOnly ?? null) !== (current.readOnly ?? null)) live.readOnly = value.readOnly
@@ -237,6 +241,12 @@ export function apply(ctx) {
     // On a browser with no visit record yet, everything already there counts as seen.
     if (Object.keys(seenAt).length === 0) leaveVisits([...value.bots, ...value.rooms].map(entry => entry.id))
     roster.set(indexRoster(value))
+    // The fresh roster holds the answer's own live fields, so the per-field
+    // identities track it from here.
+    for (const name of LIVE_FIELDS) {
+      if (value[name] !== undefined) seenLive[name] = JSON.stringify(value[name])
+      else delete seenLive[name]
+    }
     try {
       const ids = (value.agents ?? []).flatMap(agent => agent.sessions ?? [])
       localStorage.setItem(STORAGE.agentSessions, JSON.stringify(ids))
