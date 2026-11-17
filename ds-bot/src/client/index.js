@@ -875,6 +875,9 @@ export function apply(ctx) {
   actions.checkOwnApp = async () => { await ownAppUpdates?.check?.() }
   actions.installOwnApp = async () => { await ownAppUpdates?.install?.() }
   actions.openOwnApp = async () => { await ownAppUpdates?.open?.() }
+  // The app's automatic-update switch: null where the bridge has no say (DSH Web, unpackaged).
+  actions.ownAppAuto = async () => await ownAppUpdates?.auto?.() ?? null
+  actions.setOwnAppAuto = async (on) => { await ownAppUpdates?.setAuto?.(on === true) }
   const browserPages = browsers?.pages ?? createSource({})
   const browserTabs = browsers?.tabs ?? createSource({})
   const browserHolds = browsers?.holds ?? createSource({})
