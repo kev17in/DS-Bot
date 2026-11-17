@@ -31,13 +31,6 @@ extraResources:
     to: primary-runtime
   - from: build/runtime/office-skills
     to: office-skills
-  # File previews start the LibreOffice engine, a program in the engine package that the kit
-  # resolves. Electron cannot start a program by a path inside the asar, even an unpacked one
-  # (#679). Out here the engine is plain files, and Node's lookup from the kit inside the asar
-  # goes up from app.asar/node_modules to resources/node_modules and finds it.
-  - from: node_modules/@deepseek-ai
-    to: node_modules/@deepseek-ai
-    filter: ['libreoffice-kit-*/**']
 # node-pty, sharp and koffi ship prebuilt binaries for each platform. A rebuild would compile
 # node-pty from source and needs a C++ toolchain.
 npmRebuild: false
@@ -56,6 +49,15 @@ win:
       to: node_modules/@trycua
     - from: node_modules/@ubjs
       to: node_modules/@ubjs
+    # File previews start the LibreOffice engine, a program in the engine package that the
+    # kit resolves. Electron cannot start a program by a path inside the asar, even an
+    # unpacked one (#679). Out here the engine is plain files, and Node's lookup from the
+    # kit inside the asar goes up from app.asar/node_modules to resources/node_modules and
+    # finds it. npm installs every optional engine variant, so each OS filters to its own
+    # below; only the build's own platform is copied, and the others are not dead weight.
+    - from: node_modules/@deepseek-ai
+      to: node_modules/@deepseek-ai
+      filter: ['libreoffice-kit-win32-x64/**']
   target:
     - target: nsis
       arch: [x64]
@@ -85,6 +87,10 @@ mac:
   # blocks LAN connections from tool processes outright ("No route to host").
   extendInfo:
     NSLocalNetworkUsageDescription: DS Bot runs commands that connect to devices on your local network.
+  extraResources:
+    - from: node_modules/@deepseek-ai
+      to: node_modules/@deepseek-ai
+      filter: ['libreoffice-kit-darwin-*/**']
 linux:
   # The Linux Host uses the payload's plain Node, which cannot read asar archives.
   asar: false
@@ -104,6 +110,11 @@ linux:
   syncDesktopName: true
   icon: assets/icon.png
   category: Utility
+  extraResources:
+    - from: node_modules/@deepseek-ai
+      to: node_modules/@deepseek-ai
+      # No native Linux engine exists, so the kit falls back to the wasm one here.
+      filter: ['libreoffice-kit-wasm/**']
 # Let apt replace the legacy deb instead of leaving two installed applications.
 deb:
   fpm: ['--replaces', 'deepseek-bot', '--conflicts', 'deepseek-bot'] # legacy package
