@@ -354,6 +354,25 @@ test('stop-chat ends a Bot own-chat turn, and answers false when nothing runs', 
   await stop()
 })
 
+test('stop-chat cancels a turn the live map lost, and drops messages queued for the next turn', async () => {
+  const { call, ctx, stop } = start()
+  const { chief } = await team(call)
+  const sessionId = (await call('state', {})).value.bots.find(bot => bot.id === chief).sessionId
+  // No turn/start is played: the live map stays empty, as after a reload that adopted nothing.
+  let cancelled
+  const removed = []
+  ctx.sessionController.resolveAgent = async () => ({ agent: {
+    session: { id: sessionId },
+    status: 'running',
+    cancel: reason => { cancelled = reason },
+    inbox: { nextTurn: [{ id: 'q1' }, { id: 'q2' }], nextStep: [], remove: id => removed.push(id) },
+  } })
+  assert.equal((await call('stop-chat', { botId: chief })).value, true)
+  assert.equal(cancelled?.kind, 'user')
+  assert.deepEqual(removed, ['q1', 'q2'])
+  await stop()
+})
+
 test('a phone stages photos one by one, then send puts them in one message with the text', async () => {
   const { call, sent, stop } = start()
   const { chief } = await team(call)
