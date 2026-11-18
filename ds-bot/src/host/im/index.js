@@ -1529,8 +1529,8 @@ export function install(rt) {
   // approvals, secret requests and views the moment they open, so whatever asks for
   // an answer or a permission still arrives at once.
   const heldText = new Map()  // sessionId -> last held text
-  // sessionId -> the conversation's newest message, Bot or user: the reply a
-  // turn owes when it ends without a text of its own.
+  // sessionId -> the newest model reply, whole: what a turn owes the chat when
+  // it ends without a text of its own.
   const lastSpoken = new Map()
 
   ctx.on('session/event', (session, event) => {
@@ -1637,7 +1637,8 @@ export function install(rt) {
     // One event can carry several text blocks and one turn several events, each its
     // own bubble; the held answer is every block the turn wrote, joined, so what
     // goes out is the whole result rather than its last bubble. `spoken` gathers
-    // the same way within this event and becomes the conversation's newest message.
+    // the same way within this event and becomes the newest MODEL reply: the user's
+    // own words never answer a silent turn back to the chat that sent them.
     let spoken
     for (const item of rt.displayItems(session.id, [event])) {
       if (item.kind === 'bot') {
@@ -1645,9 +1646,6 @@ export function install(rt) {
         heldText.set(session.id, held === undefined ? item.text : `${held}\n\n${item.text}`)
         spoken = spoken === undefined ? item.text : `${spoken}\n\n${item.text}`
         continue
-      }
-      if (item.kind !== 'view' && typeof item.text === 'string' && item.text.trim() !== '' && item.text !== HANDOFF_ACK) {
-        spoken = spoken === undefined ? item.text : `${spoken}\n\n${item.text}`
       }
       // A view is a result drawn, not progress, and it asks nothing back: it goes
       // out as it is drawn.
@@ -1657,7 +1655,6 @@ export function install(rt) {
     }
     if (spoken !== undefined && spoken.trim() !== '' && spoken !== HANDOFF_ACK) lastSpoken.set(session.id, spoken)
   })
-
   rt.onRoomLine((room, line) => {
     if (line.botId === undefined || line.kind !== undefined || typeof line.text !== 'string' || line.text.trim() === '') return
     const origin = originOf(room.sessionId ?? room.id)

@@ -304,25 +304,36 @@ test('a multi-block and multi-message answer goes out whole, not just its last b
   assert.equal(s.fake.sent[0].text, 'part one\n\npart two\n\npart three')
 })
 
-test('a turn the chat asked never ends in silence: no text means the fallback notice', async (t) => {
+test('a turn the chat asked never ends in silence: the newest model reply answers it', async (t) => {
   const s = await start()
   t.after(s.stop)
   const conn = await add(s)
   const one = s.rt.state.im.connections[conn.id]
   one.paired.push({ id: 'u1', name: 'U1', at: 1 })
   await s.rt.save()
+  // A turn with no model reply at all, in a conversation that has none either:
+  // there is nothing to answer with, so it stays quiet — the user's own words
+  // are never echoed back.
   await dm(s, 'u1', 'hi')
   s.imTurn('a')
   s.fake.sent.length = 0
-  // The model wrote nothing at all: the conversation's newest message — the one
-  // the chat sent — is the reply the turn owes it.
+  s.emitEvent('a', 'turn/end', { reason: { kind: 'completed' } })
+  assert.equal(s.fake.sent.length, 0, 'nothing spoken stays quiet')
+  // A later turn answers, and a silent turn after it replays that model reply.
+  await dm(s, 'u1', 'again')
+  s.imTurn('a')
+  s.emitEvent('a', 'assistant/message', { message: { content: [{ type: 'text', text: 'the model answer' }] } })
+  s.emitEvent('a', 'turn/end', { reason: { kind: 'completed' } })
+  s.fake.sent.length = 0
+  await dm(s, 'u1', 'once more')
+  s.imTurn('a')
   s.emitEvent('a', 'turn/end', { reason: { kind: 'completed' } })
   assert.equal(s.fake.sent.length, 1)
   assert.equal(s.fake.sent[0].chat.key, 'dm-u1')
-  assert.equal(s.fake.sent[0].text, 'from the chat')
+  assert.equal(s.fake.sent[0].text, 'the model answer')
   // A turn that failed or was stopped still says nothing, and a question card
   // waiting for its answer is a reply of its own.
-  await dm(s, 'u1', 'again')
+  await dm(s, 'u1', 'keep going')
   s.imTurn('a')
   s.fake.sent.length = 0
   s.emitEvent('a', 'turn/end', { reason: { kind: 'stopped' } })
@@ -881,10 +892,10 @@ test('reply origin: the turn ending stops later output from going out', async (t
   s.emitEvent('a', 'turn/end', {})
   s.emitEvent('a', 'assistant/message', { message: { content: [{ type: 'text', text: 'late' }] } })
   await s.flush()
-  // The turn the chat asked ended with no reply: the guarantee notice goes out,
-  // and the late text after the turn still adds nothing.
-  assert.equal(s.fake.sent.length, 1)
-  assert.notEqual(s.fake.sent[0].text, 'late')
+  await s.flush()
+  // No model reply exists in this conversation, so the silent turn has nothing
+  // to answer with, and the late text after the turn adds nothing either.
+  assert.equal(s.fake.sent.length, 0)
 })
 
 test('reply origin: an IM message this process never registered sends nothing', async (t) => {
