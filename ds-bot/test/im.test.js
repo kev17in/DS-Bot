@@ -304,6 +304,29 @@ test('a multi-block and multi-message answer goes out whole, not just its last b
   assert.equal(s.fake.sent[0].text, 'part one\n\npart two\n\npart three')
 })
 
+test('a claim that lands before turn/start still answers at the turn end', async (t) => {
+  const s = await start()
+  t.after(s.stop)
+  const conn = await add(s)
+  const one = s.rt.state.im.connections[conn.id]
+  one.paired.push({ id: 'u1', name: 'U1', at: 1 })
+  await s.rt.save()
+  await dm(s, 'u1', 'hi')
+  // The host logs the admitted prompt before the turn opens: the claim lands
+  // before turn/start, whose reset must not spend it.
+  s.emitEvent('a', 'user/message', { source: { kind: 'user', rpcId: s.prompts.at(-1).requestId }, content: [{ type: 'text', text: 'from the chat' }] })
+  s.emitEvent('a', 'turn/start', { turn: 1 })
+  s.emitEvent('a', 'assistant/message', { message: { content: [{ type: 'text', text: 'the answer' }] } })
+  s.emitEvent('a', 'turn/end', { reason: { kind: 'completed' } })
+  assert.equal(s.fake.sent.length, 1)
+  assert.equal(s.fake.sent[0].text, 'the answer')
+  // The spent claim does not leak into a later turn nobody asked for in IM.
+  s.emitEvent('a', 'turn/start', { turn: 2 })
+  s.emitEvent('a', 'assistant/message', { message: { content: [{ type: 'text', text: 'later' }] } })
+  s.emitEvent('a', 'turn/end', { reason: { kind: 'completed' } })
+  assert.equal(s.fake.sent.length, 1)
+})
+
 test('a turn the chat asked never ends in silence: the newest model reply answers it', async (t) => {
   const s = await start()
   t.after(s.stop)

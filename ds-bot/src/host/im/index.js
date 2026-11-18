@@ -545,13 +545,14 @@ export function install(rt) {
   // The origin an IM message claimed in the running turn. A message typed in the
   // Desktop window, a web answer or a schedule withdraws the live origin for the
   // rest of the turn, but that turn's answer still owes the chat that asked, so
-  // turn/end falls back to this instead of going silent. It lives exactly one turn:
-  // claimOrigin sets it, turn/end spends it, resetOrigin clears it.
+  // turn/end falls back to this instead of going silent. It lives exactly one
+  // turn: claimOrigin sets it, however the turn's events are ordered — a claim
+  // that lands before turn/start must survive the reset there — and turn/end
+  // spends it, whatever way the turn ended.
   const turnOrigins = new Map()
   const resetOrigin = (sessionId) => {
     origins.delete(sessionId)
     mixed.delete(sessionId)
-    turnOrigins.delete(sessionId)
   }
   /**
    * The connection and chat a Session's replies go to, or undefined when nothing may
@@ -1537,7 +1538,12 @@ export function install(rt) {
     if (event.type === 'turn/start') {
       const room = rt.roomOf(session.id)
       if (room === undefined) {
-        resetOrigin(session.id)
+        // The turn's own IM message can be logged before the turn opens (a queued
+        // prompt the last turn's end admitted): its claim is already made, and the
+        // reset here must re-arm it as the live origin instead of spending it.
+        const claimed = turnOrigins.get(session.id)
+        if (claimed === undefined) resetOrigin(session.id)
+        else origins.set(session.id, { ...claimed, at: Date.now() })
       } else {
         const working = rt.roomActive?.(room.id) || (rt.roomWorkView?.()[room.id] ?? []).length > 0
         // A group's own Session can start a turn for the last member's late result after
@@ -1623,6 +1629,9 @@ export function install(rt) {
       } else if (pendingReset.delete(session.id)) {
         resetOrigin(session.id)
       }
+      // The turn is over, however it ended: its claim is spent and cannot leak
+      // into whatever turn comes next.
+      turnOrigins.delete(session.id)
     }
     const botId = rt.chatOwners.get(session.id)
     if (botId === undefined) {
