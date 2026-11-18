@@ -287,6 +287,23 @@ test('a message typed in the open Desktop window mid-turn does not silence the c
   assert.equal(s.fake.sent.length, 1)
 })
 
+test('a multi-block and multi-message answer goes out whole, not just its last bubble', async (t) => {
+  const s = await start()
+  t.after(s.stop)
+  const conn = await add(s)
+  const one = s.rt.state.im.connections[conn.id]
+  one.paired.push({ id: 'u1', name: 'U1', at: 1 })
+  await s.rt.save()
+  await dm(s, 'u1', 'hi')
+  s.imTurn('a')
+  s.fake.sent.length = 0
+  s.emitEvent('a', 'assistant/message', { message: { content: [{ type: 'text', text: 'part one' }, { type: 'text', text: 'part two' }] } })
+  s.emitEvent('a', 'assistant/message', { message: { content: [{ type: 'text', text: 'part three' }] } })
+  s.emitEvent('a', 'turn/end', { reason: { kind: 'completed' } })
+  assert.equal(s.fake.sent.length, 1)
+  assert.equal(s.fake.sent[0].text, 'part one\n\npart two\n\npart three')
+})
+
 test('a turn the chat asked never ends in silence: no text means the fallback notice', async (t) => {
   const s = await start()
   t.after(s.stop)

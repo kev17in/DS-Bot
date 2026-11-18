@@ -1634,17 +1634,20 @@ export function install(rt) {
     }
     const origin = originOf(session.id)
     if (origin === undefined) return
+    // One event can carry several text blocks and one turn several events, each its
+    // own bubble; the held answer is every block the turn wrote, joined, so what
+    // goes out is the whole result rather than its last bubble. `spoken` gathers
+    // the same way within this event and becomes the conversation's newest message.
+    let spoken
     for (const item of rt.displayItems(session.id, [event])) {
       if (item.kind === 'bot') {
-        heldText.set(session.id, item.text)
-        if (item.text.trim() !== '' && item.text !== HANDOFF_ACK) lastSpoken.set(session.id, item.text)
+        const held = heldText.get(session.id)
+        heldText.set(session.id, held === undefined ? item.text : `${held}\n\n${item.text}`)
+        spoken = spoken === undefined ? item.text : `${spoken}\n\n${item.text}`
         continue
       }
-      // Every other message the conversation shows is remembered as its last
-      // one, whatever wrote it: a turn that ends without a reply of its own
-      // answers the chat with this text instead of a fixed line.
       if (item.kind !== 'view' && typeof item.text === 'string' && item.text.trim() !== '' && item.text !== HANDOFF_ACK) {
-        lastSpoken.set(session.id, item.text)
+        spoken = spoken === undefined ? item.text : `${spoken}\n\n${item.text}`
       }
       // A view is a result drawn, not progress, and it asks nothing back: it goes
       // out as it is drawn.
@@ -1652,6 +1655,7 @@ export function install(rt) {
       const body = viewCardText({ title: item.title, view: item.view }) || (item.title ?? '')
       sendTo(origin.conn, origin.chatKey, { key: origin.chatKey, kind: origin.chat.kind, title: origin.chat.title }, body)
     }
+    if (spoken !== undefined && spoken.trim() !== '' && spoken !== HANDOFF_ACK) lastSpoken.set(session.id, spoken)
   })
 
   rt.onRoomLine((room, line) => {
