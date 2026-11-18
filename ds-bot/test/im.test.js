@@ -297,11 +297,12 @@ test('a turn the chat asked never ends in silence: no text means the fallback no
   await dm(s, 'u1', 'hi')
   s.imTurn('a')
   s.fake.sent.length = 0
-  // The model wrote nothing at all: the turn still owes the chat one message.
+  // The model wrote nothing at all: the conversation's newest message — the one
+  // the chat sent — is the reply the turn owes it.
   s.emitEvent('a', 'turn/end', { reason: { kind: 'completed' } })
   assert.equal(s.fake.sent.length, 1)
   assert.equal(s.fake.sent[0].chat.key, 'dm-u1')
-  assert.ok(s.fake.sent[0].text.length > 0, 'a notice, not silence')
+  assert.equal(s.fake.sent[0].text, 'from the chat')
   // A turn that failed or was stopped still says nothing, and a question card
   // waiting for its answer is a reply of its own.
   await dm(s, 'u1', 'again')

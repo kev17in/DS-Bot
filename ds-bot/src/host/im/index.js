@@ -59,7 +59,6 @@ export function install(rt) {
         numbersMulti: 'reply with the numbers, separated by spaces',
         allow: 'Allow once',
         reject: 'Reject',
-        noReply: 'This turn ended without a reply; check DS Bot on the computer.',
       },
       zh: {
         requested: '已向 DS Bot 发出连接请求，请在电脑上的 DS Bot 设置 → IM 里允许。',
@@ -80,7 +79,6 @@ export function install(rt) {
         numbersMulti: '回复编号，多选用空格隔开',
         allow: '允许一次',
         reject: '拒绝',
-        noReply: '这一轮结束了但没有给出回复，请在电脑上查看 DS Bot。',
       },
       'zh-TW': {
         requested: '已向 DS Bot 發出連線請求，請在電腦上的 DS Bot 設定 → IM 裡允許。',
@@ -101,7 +99,6 @@ export function install(rt) {
         numbersMulti: '回覆編號，多選用空格隔開',
         allow: '允許一次',
         reject: '拒絕',
-        noReply: '這一輪結束但沒有回覆，請在電腦上查看 DS Bot。',
       },
       ja: {
         requested: 'DS Bot に接続リクエストを送信しました。PC の DS Bot 設定 → IM で許可してください。',
@@ -122,7 +119,6 @@ export function install(rt) {
         numbersMulti: '番号をスペース区切りで返信',
         allow: '1回許可',
         reject: '拒否',
-        noReply: 'このターンは回答なく終わりました。PC の DS Bot を確認してください。',
       },
       ko: {
         requested: 'DS Bot에 연결 요청을 보냈습니다. 컴퓨터의 DS Bot 설정 → IM에서 허용해 주세요.',
@@ -143,7 +139,6 @@ export function install(rt) {
         numbersMulti: '공백으로 구분하여 번호로 답장',
         allow: '한 번 허용',
         reject: '거부',
-        noReply: '이번 턴이 응답 없이 끝났습니다. 컴퓨터의 DS Bot을 확인해 주세요.',
       },
       es: {
         requested: 'Se envió una solicitud de conexión a DS Bot; permítela en Ajustes → IM en el ordenador.',
@@ -164,7 +159,6 @@ export function install(rt) {
         numbersMulti: 'responde con los números separados por espacios',
         allow: 'Permitir una vez',
         reject: 'Rechazar',
-        noReply: 'Este turno terminó sin respuesta; mira DS Bot en el ordenador.',
       },
       fr: {
         requested: 'Une demande de connexion a été envoyée à DS Bot ; autorisez-la dans Paramètres → IM sur l’ordinateur.',
@@ -185,7 +179,6 @@ export function install(rt) {
         numbersMulti: 'répondez avec les numéros séparés par des espaces',
         allow: 'Autoriser une fois',
         reject: 'Refuser',
-        noReply: 'Ce tour s’est terminé sans réponse ; consulte DS Bot sur l’ordinateur.',
       },
       de: {
         requested: 'Eine Verbindungsanfrage wurde an DS Bot gesendet; erlaube sie am Computer unter Einstellungen → IM.',
@@ -205,7 +198,6 @@ export function install(rt) {
         numbers: 'mit der Nummer antworten',
         numbersMulti: 'mit durch Leerzeichen getrennten Nummern antworten',
         allow: 'Einmal erlauben',
-        noReply: 'Dieser Durchlauf endete ohne Antwort; sieh DS Bot auf dem Computer an.',
         reject: 'Ablehnen',
       },
     }
@@ -1537,6 +1529,9 @@ export function install(rt) {
   // approvals, secret requests and views the moment they open, so whatever asks for
   // an answer or a permission still arrives at once.
   const heldText = new Map()  // sessionId -> last held text
+  // sessionId -> the conversation's newest message, Bot or user: the reply a
+  // turn owes when it ends without a text of its own.
+  const lastSpoken = new Map()
 
   ctx.on('session/event', (session, event) => {
     if (event.type === 'turn/start') {
@@ -1606,12 +1601,16 @@ export function install(rt) {
         if (origin !== undefined && origin.conn.chats?.[origin.chatKey]?.pushFinal !== false) {
           // A turn an IM chat asked must never end in silence: its answer goes out,
           // and a turn that produced none — the model wrote no text, or only tools
-          // ran — ends with a plain notice instead. A handoff's fixed ack stays
-          // hidden, and a turn that failed or was stopped says nothing, as before.
+          // ran — answers with the conversation's newest message instead. A
+          // handoff's fixed ack stays hidden, and a turn that failed or was
+          // stopped, or a chat with nothing spoken at all, says nothing.
           if (body !== '' && body !== HANDOFF_ACK) {
             sendTo(origin.conn, origin.chatKey, { key: origin.chatKey, kind: origin.chat.kind, title: origin.chat.title }, body)
           } else if (completed && claimed && rt.roomOf(session.id) === undefined && rt.own?.(state.questions, session.id) === undefined) {
-            sendTo(origin.conn, origin.chatKey, { key: origin.chatKey, kind: origin.chat.kind, title: origin.chat.title }, text('noReply'))
+            const last = (lastSpoken.get(session.id) ?? '').trim()
+            if (last !== '' && last !== HANDOFF_ACK) {
+              sendTo(origin.conn, origin.chatKey, { key: origin.chatKey, kind: origin.chat.kind, title: origin.chat.title }, last)
+            }
           }
         }
       }
@@ -1629,6 +1628,7 @@ export function install(rt) {
     if (botId === undefined) {
       // A group's own chat has no Bot of its own; its lines go out from onRoomLine.
       imVia.delete(session.id)
+      lastSpoken.delete(session.id)
       heldText.delete(session.id)
       return
     }
@@ -1637,7 +1637,14 @@ export function install(rt) {
     for (const item of rt.displayItems(session.id, [event])) {
       if (item.kind === 'bot') {
         heldText.set(session.id, item.text)
+        if (item.text.trim() !== '' && item.text !== HANDOFF_ACK) lastSpoken.set(session.id, item.text)
         continue
+      }
+      // Every other message the conversation shows is remembered as its last
+      // one, whatever wrote it: a turn that ends without a reply of its own
+      // answers the chat with this text instead of a fixed line.
+      if (item.kind !== 'view' && typeof item.text === 'string' && item.text.trim() !== '' && item.text !== HANDOFF_ACK) {
+        lastSpoken.set(session.id, item.text)
       }
       // A view is a result drawn, not progress, and it asks nothing back: it goes
       // out as it is drawn.
